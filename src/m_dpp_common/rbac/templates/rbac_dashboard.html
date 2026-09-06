@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DPP RBAC Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 1.5rem 2rem; color: #1a1a1a; background: #f8f9fa; }
+    h1 { margin: 0; font-size: 1.25rem; font-weight: 600; }
+    h2 { font-size: 0.95rem; font-weight: 600; margin: 0; color: #444; }
+    .header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+    .header-actions { display: flex; align-items: center; gap: 0.6rem; margin-left: auto; }
+    .filter-input { padding: 0.35rem 0.6rem; border: 1px solid #ccc; border-radius: 5px; font-size: 0.85rem; width: 190px; }
+    .filter-input:focus { outline: none; border-color: #0066cc; box-shadow: 0 0 0 2px #0066cc22; }
+    .btn { padding: 0.35rem 0.9rem; border: 1px solid #ccc; border-radius: 5px; cursor: pointer; font-size: 0.85rem; background: #fff; }
+    .btn:hover { background: #f0f0f0; }
+    .btn-primary { background: #0066cc; color: #fff; border-color: #0055aa; }
+    .btn-primary:hover { background: #0055aa; }
+    .btn-danger { background: #fff; color: #dc3545; border-color: #dc3545; padding: 0.15rem 0.5rem; font-size: 0.75rem; }
+    .btn-danger:hover { background: #dc3545; color: #fff; }
+    /* Shared tabs — one strip drives both attr and resource sections */
+    .tabs { display: flex; gap: 0.4rem; border-bottom: 2px solid #e0e0e0; margin-bottom: 0; }
+    .tab { padding: 0.45rem 1.1rem; border: 1px solid transparent; border-bottom: none; border-radius: 5px 5px 0 0; cursor: pointer; font-size: 0.875rem; background: transparent; color: #555; position: relative; bottom: -2px; }
+    .tab:hover { background: #f0f0f0; }
+    .tab.active { background: #fff; border-color: #e0e0e0; color: #0066cc; font-weight: 600; border-bottom-color: #fff; }
+    .status-bar { min-height: 1.4rem; font-size: 0.82rem; color: #555; margin: 0.5rem 0; }
+    .status-bar.ok { color: #198754; }
+    .status-bar.err { color: #dc3545; }
+    .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 0 6px 6px 6px; overflow: hidden; margin-bottom: 1.5rem; }
+    .card-header { padding: 0.65rem 1rem; border-bottom: 1px solid #e0e0e0; background: #fafafa; display: flex; align-items: center; gap: 0.75rem; }
+    .card-sep { height: 1px; background: #e0e0e0; margin: 0; }
+    table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+    thead th { background: #f5f5f5; padding: 0.5rem 0.85rem; text-align: left; font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: #666; border-bottom: 2px solid #e0e0e0; white-space: nowrap; }
+    thead th.center { text-align: center; }
+    tbody tr { border-bottom: 1px solid #efefef; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #fafafa; }
+    td { padding: 0.45rem 0.85rem; }
+    td.center { text-align: center; }
+    td.attr-key { font-family: ui-monospace, monospace; font-size: 0.82rem; color: #333; min-width: 160px; }
+    td.perm-cell { white-space: nowrap; }
+    select.perm-select { border: 1px solid #ccc; border-radius: 4px; padding: 0.2rem 0.35rem; font-size: 0.8rem; background: #fff; cursor: pointer; }
+    select.perm-select.access-none { color: #888; }
+    select.perm-select.access-read { color: #0066cc; }
+    select.perm-select.access-rw { color: #198754; font-weight: 600; }
+    /* Resource-level checkboxes */
+    input[type=checkbox].res-cb { width: 1rem; height: 1rem; cursor: pointer; accent-color: #0066cc; }
+    input[type=checkbox].res-cb:disabled { cursor: not-allowed; opacity: 0.4; }
+    .cb-wrap { display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
+    .cb-status { font-size: 0.72rem; }
+    .cb-status.ok { color: #198754; }
+    .cb-status.err { color: #dc3545; }
+    /* Inline save indicators */
+    .cell-status { display: inline-block; font-size: 0.75rem; margin-left: 0.3rem; width: 1.2em; }
+    .cell-status.ok { color: #198754; }
+    .cell-status.err { color: #dc3545; }
+    .empty-state { text-align: center; padding: 2.5rem 1rem; color: #888; }
+    .empty-state strong { color: #555; }
+    .badge { display: inline-block; font-size: 0.7rem; padding: 0.1rem 0.45rem; border-radius: 3px; background: #e8f0fe; color: #0066cc; font-weight: 600; }
+    .role-tag { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; padding: 0.15rem 0.5rem; border-radius: 3px; background: #e8f0fe; color: #0066cc; margin: 0.1rem; }
+    .role-tag button { background: none; border: none; cursor: pointer; color: #0066cc; font-size: 0.75rem; padding: 0; line-height: 1; }
+    .role-tag button:hover { color: #dc3545; }
+    .add-row { padding: 0.6rem 0.85rem; display: flex; gap: 0.5rem; align-items: center; border-top: 1px solid #efefef; background: #fafafa; }
+    .add-row select { padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; }
+    td.op-name { color: #555; font-size: 0.82rem; }
+    td.op-gln { font-family: ui-monospace, monospace; font-size: 0.82rem; }
+    td.role-name-cell { font-size: 0.85rem; font-weight: 500; min-width: 180px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>DPP RBAC Dashboard</h1>
+  <div class="header-actions">
+    <input class="filter-input" type="search" id="filterInput" placeholder="Filter attributes…" oninput="filterAttrTable()" autocomplete="off">
+    <button class="btn btn-primary" onclick="syncAttrs()">Sync Attrs</button>
+  </div>
+</div>
+
+<!-- Shared resource-type tabs — drive both sections below -->
+<div class="tabs">
+  <button class="tab active" onclick="selectResource('dpp_models', this)">Models</button>
+  <button class="tab" onclick="selectResource('dpp_variants', this)">Variants</button>
+  <button class="tab" onclick="selectResource('dpp_batches', this)">Batches</button>
+  <button class="tab" onclick="selectResource('dpp_items', this)">Items</button>
+  <button class="tab" onclick="selectResource('operators', this)">Operators</button>
+</div>
+
+<div class="status-bar" id="statusBar"></div>
+
+<!-- 1. Resource-level access (coarse gate) -->
+<div class="card" style="border-radius:0 6px 6px 6px;">
+  <div class="card-header">
+    <h2>Resource Access</h2>
+    <span class="badge" style="margin-left:0">who can list / read / create / update / delete</span>
+  </div>
+  <div id="resPermContainer"><div class="empty-state">Loading…</div></div>
+</div>
+
+<!-- 2. Attribute-level access (fine filter) -->
+<div class="card">
+  <div class="card-header">
+    <h2>Attribute Access</h2>
+    <span id="attrCount" class="badge" style="display:none"></span>
+    <span style="font-size:0.8rem;color:#888;margin-left:auto">which attrs are visible / writable per role</span>
+  </div>
+  <div id="attrContainer"><div class="empty-state">Loading…</div></div>
+</div>
+
+<!-- 3. Operator role assignments -->
+<div class="card">
+  <div class="card-header">
+    <h2>Operator Role Assignments</h2>
+    <span id="opRoleCount" class="badge" style="display:none"></span>
+  </div>
+  <div id="opRoleContainer"><div class="empty-state">Loading…</div></div>
+  <div class="add-row">
+    <select id="addOpGln" style="min-width:220px"><option value="">Select operator…</option></select>
+    <select id="addRoleName" style="min-width:180px"><option value="">Select role…</option></select>
+    <button class="btn btn-primary" onclick="addOperatorRole()">Assign Role</button>
+    <span id="addRoleStatus" style="font-size:0.82rem;margin-left:0.3rem"></span>
+  </div>
+</div>
+
+<script>
+  let currentResource = 'dpp_models';
+  let roles = [];
+  let attrPermissions = [];
+  let resPermissions = [];
+  let operatorRoles = [];
+  let operators = [];
+
+  const ROLE_ORDER = ['public','end_user_professional','recycler','supply_chain_professional','authority'];
+  const ROLE_LABELS = {
+    public: 'Public',
+    end_user_professional: 'End User Professional',
+    recycler: 'Recycler',
+    supply_chain_professional: 'Supply Chain Pro',
+    authority: 'Authority',
+  };
+  const OPS = ['list','read','create','update','delete'];
+
+  function permValue(p) {
+    if (!p) return 'read';
+    if (!p.can_read) return 'none';
+    return p.can_write ? 'rw' : 'read';
+  }
+  function selectClass(v) { return v==='none'?'access-none':v==='read'?'access-read':'access-rw'; }
+
+  async function init() {
+    const rolesRes = await fetch('/admin/rbac/roles');
+    const rolesData = await rolesRes.json();
+    // /operators is service-specific — tolerate its absence (e.g. mdpp-app).
+    try {
+      const opsRes = await fetch('/operators');
+      operators = opsRes.ok ? await opsRes.json() : [];
+    } catch (_) {
+      operators = [];
+    }
+
+    roles = ROLE_ORDER
+      .filter(n => rolesData.some(r => r.name === n))
+      .map(n => rolesData.find(r => r.name === n))
+      .concat(rolesData.filter(r => !ROLE_ORDER.includes(r.name)));
+
+    const opSel = document.getElementById('addOpGln');
+    operators.forEach(op => {
+      const o = document.createElement('option');
+      o.value = op.gln || op.id;
+      o.textContent = `${op.name || op.gln} (${op.gln || ''})`;
+      opSel.appendChild(o);
+    });
+    const roleSel = document.getElementById('addRoleName');
+    roles.forEach(r => {
+      const o = document.createElement('option');
+      o.value = r.name;
+      o.textContent = ROLE_LABELS[r.name] || r.name;
+      roleSel.appendChild(o);
+    });
+
+    await Promise.all([loadResPermissions(), loadAttrPermissions(), loadOperatorRoles()]);
+  }
+
+  // ── Resource-level permissions ─────────────────────────────────────────
+
+  async function loadResPermissions() {
+    const res = await fetch(`/admin/rbac/resource-permissions?resource_type=${currentResource}`);
+    resPermissions = await res.json();
+    renderResPermissions();
+  }
+
+  function renderResPermissions() {
+    const container = document.getElementById('resPermContainer');
+    if (resPermissions.length === 0) {
+      container.innerHTML = '<div class="empty-state">No permission rows found — restart the API to seed defaults.</div>';
+      return;
+    }
+
+    let html = '<table><thead><tr><th>Role</th>';
+    OPS.forEach(op => { html += `<th class="center">${op.charAt(0).toUpperCase()+op.slice(1)}</th>`; });
+    html += '</tr></thead><tbody>';
+
+    roles.forEach(role => {
+      const perm = resPermissions.find(p => p.role_name === role.name);
+      if (!perm) return;
+      html += `<tr><td class="role-name-cell">${ROLE_LABELS[role.name] || role.name}</td>`;
+      OPS.forEach(op => {
+        const col = `can_${op}`;
+        const checked = perm[col] ? 'checked' : '';
+        html += `<td class="center">
+          <div class="cb-wrap">
+            <input type="checkbox" class="res-cb" ${checked}
+              data-id="${perm.id}" data-col="${col}"
+              onchange="onResCbChange(this)">
+            <span class="cb-status" id="rcs-${perm.id}-${op}"></span>
+          </div>
+        </td>`;
+      });
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  async function onResCbChange(cb) {
+    const id = cb.dataset.id;
+    const col = cb.dataset.col;
+    const value = cb.checked;
+    const statusEl = document.getElementById(`rcs-${id}-${col.replace('can_','')}`);
+
+    try {
+      const res = await fetch(`/admin/rbac/resource-permissions/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [col]: value }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        const idx = resPermissions.findIndex(p => p.id === id);
+        if (idx >= 0) resPermissions[idx] = updated;
+        statusEl.textContent = '✓';
+        statusEl.className = 'cb-status ok';
+        setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'cb-status'; }, 1500);
+      } else {
+        cb.checked = !value; // revert
+        statusEl.textContent = '✗'; statusEl.className = 'cb-status err';
+      }
+    } catch {
+      cb.checked = !value;
+      statusEl.textContent = '✗'; statusEl.className = 'cb-status err';
+    }
+  }
+
+  // ── Attribute-level permissions ────────────────────────────────────────
+
+  async function loadAttrPermissions() {
+    document.getElementById('attrContainer').innerHTML = '<div class="empty-state">Loading…</div>';
+    const res = await fetch(`/admin/rbac/permissions?resource_type=${currentResource}`);
+    attrPermissions = await res.json();
+    renderAttrPermissions();
+  }
+
+  function renderAttrPermissions() {
+    const container = document.getElementById('attrContainer');
+    const attrKeys = [...new Set(attrPermissions.map(p => p.attr_key))].sort();
+
+    const badge = document.getElementById('attrCount');
+    badge.textContent = `${attrKeys.length} attr${attrKeys.length !== 1 ? 's' : ''}`;
+    badge.style.display = attrKeys.length > 0 ? '' : 'none';
+
+    if (attrKeys.length === 0) {
+      container.innerHTML = `<div class="empty-state">No attributes found for <strong>${currentResource}</strong>.<br><br>Click <strong>Sync Attrs</strong> to discover attributes from the database.</div>`;
+      return;
+    }
+
+    let html = '<table><thead><tr><th>Attribute Key</th>';
+    roles.forEach(r => { html += `<th>${ROLE_LABELS[r.name] || r.name}</th>`; });
+    html += '</tr></thead><tbody>';
+
+    attrKeys.forEach(key => {
+      html += `<tr data-key="${key}"><td class="attr-key">${key}</td>`;
+      roles.forEach(role => {
+        const perm = attrPermissions.find(p => p.attr_key === key && p.role_name === role.name);
+        const val = permValue(perm);
+        const id = perm ? perm.id : null;
+        const cls = selectClass(val);
+        html += `<td class="perm-cell">
+          <select class="perm-select ${cls}" data-id="${id}" data-key="${key}" data-role="${role.name}" onchange="onAttrSelectChange(this)">
+            <option value="none" ${val==='none'?'selected':''}>No Access</option>
+            <option value="read" ${val==='read'?'selected':''}>Read Only</option>
+            <option value="rw"   ${val==='rw'  ?'selected':''}>Read + Write</option>
+          </select>
+          <span class="cell-status" id="cs-${id||(key+'_'+role.name)}"></span>
+        </td>`;
+      });
+      html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+    filterAttrTable();
+  }
+
+  async function onAttrSelectChange(sel) {
+    const val = sel.value;
+    const id = sel.dataset.id;
+    const key = sel.dataset.key;
+    const role = sel.dataset.role;
+    const statusId = `cs-${id !== 'null' && id ? id : (key+'_'+role)}`;
+    const statusEl = document.getElementById(statusId);
+
+    sel.className = `perm-select ${selectClass(val)}`;
+
+    if (!id || id === 'null') {
+      statusEl.textContent = '!'; statusEl.className = 'cell-status err';
+      statusEl.title = 'No permission row — run Sync Attrs first';
+      return;
+    }
+
+    const can_read = val !== 'none', can_write = val === 'rw';
+    try {
+      const res = await fetch(`/admin/rbac/permissions/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ can_read, can_write }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        const idx = attrPermissions.findIndex(p => p.id === id);
+        if (idx >= 0) attrPermissions[idx] = updated;
+        statusEl.textContent = '✓'; statusEl.className = 'cell-status ok';
+        setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'cell-status'; }, 2000);
+      } else {
+        statusEl.textContent = '✗'; statusEl.className = 'cell-status err';
+      }
+    } catch { statusEl.textContent = '✗'; statusEl.className = 'cell-status err'; }
+  }
+
+  async function syncAttrs() {
+    const bar = document.getElementById('statusBar');
+    bar.className = 'status-bar'; bar.textContent = 'Syncing attributes from database…';
+    try {
+      const res = await fetch('/admin/rbac/sync-attrs', { method: 'POST' });
+      const data = await res.json();
+      bar.className = 'status-bar ok';
+      bar.textContent = `✓ Sync complete — ${data.discovered} attribute keys found, ${data.inserted} new permission rows created.`;
+      await loadAttrPermissions();
+    } catch {
+      bar.className = 'status-bar err'; bar.textContent = '✗ Sync failed.';
+    }
+  }
+
+  // ── Operator role assignments ──────────────────────────────────────────
+
+  async function loadOperatorRoles() {
+    const res = await fetch('/admin/rbac/operator-roles');
+    operatorRoles = await res.json();
+    renderOperatorRoles();
+  }
+
+  function renderOperatorRoles() {
+    const container = document.getElementById('opRoleContainer');
+    const badge = document.getElementById('opRoleCount');
+    const byGln = {};
+    operatorRoles.forEach(a => {
+      if (!byGln[a.operator_gln]) byGln[a.operator_gln] = { name: a.operator_name, roles: [] };
+      byGln[a.operator_gln].roles.push({ id: a.id, role_name: a.role_name });
+    });
+    const glns = Object.keys(byGln);
+    badge.textContent = `${glns.length} operator${glns.length!==1?'s':''}`;
+    badge.style.display = glns.length > 0 ? '' : 'none';
+    if (glns.length === 0) {
+      container.innerHTML = '<div class="empty-state">No role assignments yet. Use the form below to assign roles to operators.</div>';
+      return;
+    }
+    let html = '<table><thead><tr><th>GLN</th><th>Operator Name</th><th>Assigned Roles</th></tr></thead><tbody>';
+    glns.sort().forEach(gln => {
+      const { name, roles: assigned } = byGln[gln];
+      const tags = assigned.map(a =>
+        `<span class="role-tag">${ROLE_LABELS[a.role_name]||a.role_name}
+          <button onclick="removeOperatorRole('${a.id}')" title="Remove">×</button>
+        </span>`
+      ).join('');
+      html += `<tr><td class="op-gln">${gln}</td><td class="op-name">${name||'—'}</td><td>${tags}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  }
+
+  async function addOperatorRole() {
+    const gln = document.getElementById('addOpGln').value;
+    const role = document.getElementById('addRoleName').value;
+    const status = document.getElementById('addRoleStatus');
+    if (!gln || !role) { status.textContent = 'Select both an operator and a role.'; status.style.color='#dc3545'; return; }
+    const res = await fetch('/admin/rbac/operator-roles', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operator_gln: gln, role_name: role }),
+    });
+    if (res.ok) {
+      status.textContent = '✓ Assigned'; status.style.color = '#198754';
+      setTimeout(() => { status.textContent = ''; }, 2000);
+      await loadOperatorRoles();
+    } else if (res.status === 409) {
+      status.textContent = 'Already assigned.'; status.style.color = '#dc3545';
+    } else {
+      status.textContent = '✗ Error'; status.style.color = '#dc3545';
+    }
+  }
+
+  async function removeOperatorRole(id) {
+    const res = await fetch(`/admin/rbac/operator-roles/${id}`, { method: 'DELETE' });
+    if (res.ok || res.status === 204) await loadOperatorRoles();
+  }
+
+  // ── Tab switching ──────────────────────────────────────────────────────
+
+  function selectResource(resource, btn) {
+    currentResource = resource;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('filterInput').value = '';
+    // Reload both permission sections for the new resource type
+    Promise.all([loadResPermissions(), loadAttrPermissions()]);
+  }
+
+  function filterAttrTable() {
+    const filter = document.getElementById('filterInput').value.toLowerCase();
+    document.querySelectorAll('#attrContainer tbody tr[data-key]').forEach(row => {
+      row.style.display = (row.getAttribute('data-key')||'').toLowerCase().includes(filter) ? '' : 'none';
+    });
+  }
+
+  init();
+</script>
+</body>
+</html>

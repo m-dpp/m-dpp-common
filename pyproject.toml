@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "m-dpp-common"
+version = "0.1.0"
+description = "Shared infrastructure for the mDPP services: GS1 identifiers, DB plumbing, ORM mixins, auth stub, RBAC engine. Infrastructure only — no domain logic."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "sqlalchemy[asyncio]",
+    "pydantic",
+    "jinja2",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+m_dpp_common = ["rbac/templates/*.html"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
