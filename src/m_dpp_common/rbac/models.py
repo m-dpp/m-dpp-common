@@ -21,13 +21,17 @@ class RoleMixin:
 
 
 class AttrPermissionMixin:
+    """Flat attribute ACL: one rule per (attr_key, role_name), applied wherever the
+    key appears. `attrs` is a single override-inherited key namespace, so the ACL
+    mirrors that shape — it is NOT scoped per resource type. (The resource-level
+    gate, `ResourcePermissionMixin`, still is per resource type.)"""
+
     __tablename__ = "attr_permissions"
     __table_args__ = (
-        UniqueConstraint("resource_type", "attr_key", "role_name", name="uq_attr_permission"),
+        UniqueConstraint("attr_key", "role_name", name="uq_attr_permission"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    resource_type: Mapped[str] = mapped_column(String, nullable=False)
     attr_key: Mapped[str] = mapped_column(String, nullable=False)
     role_name: Mapped[str] = mapped_column(String, nullable=False)
     can_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

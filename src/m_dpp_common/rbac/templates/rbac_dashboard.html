@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DPP RBAC Dashboard</title>
+  <title>RBAC Dashboard</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 1.5rem 2rem; color: #1a1a1a; background: #f8f9fa; }
@@ -19,17 +19,17 @@
     .btn-primary:hover { background: #0055aa; }
     .btn-danger { background: #fff; color: #dc3545; border-color: #dc3545; padding: 0.15rem 0.5rem; font-size: 0.75rem; }
     .btn-danger:hover { background: #dc3545; color: #fff; }
-    /* Shared tabs — one strip drives both attr and resource sections */
-    .tabs { display: flex; gap: 0.4rem; border-bottom: 2px solid #e0e0e0; margin-bottom: 0; }
-    .tab { padding: 0.45rem 1.1rem; border: 1px solid transparent; border-bottom: none; border-radius: 5px 5px 0 0; cursor: pointer; font-size: 0.875rem; background: transparent; color: #555; position: relative; bottom: -2px; }
-    .tab:hover { background: #f0f0f0; }
-    .tab.active { background: #fff; border-color: #e0e0e0; color: #0066cc; font-weight: 600; border-bottom-color: #fff; }
-    .status-bar { min-height: 1.4rem; font-size: 0.82rem; color: #555; margin: 0.5rem 0; }
+    /* Segmented control — selects the resource type for the Resource Access card */
+    .seg { display: inline-flex; border: 1px solid #ccc; border-radius: 6px; overflow: hidden; }
+    .seg-btn { padding: 0.3rem 0.8rem; border: none; border-left: 1px solid #ddd; background: #fff; cursor: pointer; font-size: 0.8rem; color: #555; }
+    .seg-btn:first-child { border-left: none; }
+    .seg-btn:hover { background: #f0f0f0; }
+    .seg-btn.active { background: #0066cc; color: #fff; }
+    .status-bar { min-height: 1.4rem; font-size: 0.82rem; color: #555; margin: 0.5rem 0 1rem; }
     .status-bar.ok { color: #198754; }
     .status-bar.err { color: #dc3545; }
-    .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 0 6px 6px 6px; overflow: hidden; margin-bottom: 1.5rem; }
-    .card-header { padding: 0.65rem 1rem; border-bottom: 1px solid #e0e0e0; background: #fafafa; display: flex; align-items: center; gap: 0.75rem; }
-    .card-sep { height: 1px; background: #e0e0e0; margin: 0; }
+    .card { background: #fff; border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden; margin-bottom: 1.5rem; }
+    .card-header { padding: 0.65rem 1rem; border-bottom: 1px solid #e0e0e0; background: #fafafa; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
     table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
     thead th { background: #f5f5f5; padding: 0.5rem 0.85rem; text-align: left; font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: #666; border-bottom: 2px solid #e0e0e0; white-space: nowrap; }
     thead th.center { text-align: center; }
@@ -44,20 +44,19 @@
     select.perm-select.access-none { color: #888; }
     select.perm-select.access-read { color: #0066cc; }
     select.perm-select.access-rw { color: #198754; font-weight: 600; }
-    /* Resource-level checkboxes */
     input[type=checkbox].res-cb { width: 1rem; height: 1rem; cursor: pointer; accent-color: #0066cc; }
     input[type=checkbox].res-cb:disabled { cursor: not-allowed; opacity: 0.4; }
     .cb-wrap { display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
     .cb-status { font-size: 0.72rem; }
     .cb-status.ok { color: #198754; }
     .cb-status.err { color: #dc3545; }
-    /* Inline save indicators */
     .cell-status { display: inline-block; font-size: 0.75rem; margin-left: 0.3rem; width: 1.2em; }
     .cell-status.ok { color: #198754; }
     .cell-status.err { color: #dc3545; }
     .empty-state { text-align: center; padding: 2.5rem 1rem; color: #888; }
     .empty-state strong { color: #555; }
     .badge { display: inline-block; font-size: 0.7rem; padding: 0.1rem 0.45rem; border-radius: 3px; background: #e8f0fe; color: #0066cc; font-weight: 600; }
+    .hint { font-size: 0.8rem; color: #888; }
     .role-tag { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; padding: 0.15rem 0.5rem; border-radius: 3px; background: #e8f0fe; color: #0066cc; margin: 0.1rem; }
     .role-tag button { background: none; border: none; cursor: pointer; color: #0066cc; font-size: 0.75rem; padding: 0; line-height: 1; }
     .role-tag button:hover { color: #dc3545; }
@@ -71,39 +70,31 @@
 <body>
 
 <div class="header">
-  <h1>DPP RBAC Dashboard</h1>
+  <h1>RBAC Dashboard</h1>
   <div class="header-actions">
     <input class="filter-input" type="search" id="filterInput" placeholder="Filter attributes…" oninput="filterAttrTable()" autocomplete="off">
     <button class="btn btn-primary" onclick="syncAttrs()">Sync Attrs</button>
   </div>
 </div>
 
-<!-- Shared resource-type tabs — drive both sections below -->
-<div class="tabs">
-  <button class="tab active" onclick="selectResource('dpp_models', this)">Models</button>
-  <button class="tab" onclick="selectResource('dpp_variants', this)">Variants</button>
-  <button class="tab" onclick="selectResource('dpp_batches', this)">Batches</button>
-  <button class="tab" onclick="selectResource('dpp_items', this)">Items</button>
-  <button class="tab" onclick="selectResource('operators', this)">Operators</button>
-</div>
-
 <div class="status-bar" id="statusBar"></div>
 
-<!-- 1. Resource-level access (coarse gate) -->
-<div class="card" style="border-radius:0 6px 6px 6px;">
+<!-- 1. Resource-level access (coarse gate) — per resource type -->
+<div class="card">
   <div class="card-header">
     <h2>Resource Access</h2>
-    <span class="badge" style="margin-left:0">who can list / read / create / update / delete</span>
+    <span class="badge">list / read / create / update / delete, per role</span>
+    <div class="seg" id="resourceSeg" style="margin-left:auto"></div>
   </div>
   <div id="resPermContainer"><div class="empty-state">Loading…</div></div>
 </div>
 
-<!-- 2. Attribute-level access (fine filter) -->
+<!-- 2. Attribute-level access (fine filter) — flat: one rule per attribute name -->
 <div class="card">
   <div class="card-header">
     <h2>Attribute Access</h2>
     <span id="attrCount" class="badge" style="display:none"></span>
-    <span style="font-size:0.8rem;color:#888;margin-left:auto">which attrs are visible / writable per role</span>
+    <span class="hint" style="margin-left:auto">one rule per attribute name — it applies wherever that key appears, at any level</span>
   </div>
   <div id="attrContainer"><div class="empty-state">Loading…</div></div>
 </div>
@@ -124,12 +115,13 @@
 </div>
 
 <script>
-  let currentResource = 'dpp_models';
   let roles = [];
   let attrPermissions = [];
   let resPermissions = [];
   let operatorRoles = [];
   let operators = [];
+  let resourceTypes = [];       // discovered from the resource-permissions rows
+  let currentResource = null;
 
   const ROLE_ORDER = ['public','end_user_professional','recycler','supply_chain_professional','authority'];
   const ROLE_LABELS = {
@@ -141,6 +133,9 @@
   };
   const OPS = ['list','read','create','update','delete'];
 
+  function labelFor(rt) {
+    return rt.replace(/^dpp_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
   function permValue(p) {
     if (!p) return 'read';
     if (!p.can_read) return 'none';
@@ -151,7 +146,6 @@
   async function init() {
     const rolesRes = await fetch('/admin/rbac/roles');
     const rolesData = await rolesRes.json();
-    // /operators is service-specific — tolerate its absence (e.g. mdpp-app).
     try {
       const opsRes = await fetch('/operators');
       operators = opsRes.ok ? await opsRes.json() : [];
@@ -179,21 +173,40 @@
       roleSel.appendChild(o);
     });
 
-    await Promise.all([loadResPermissions(), loadAttrPermissions(), loadOperatorRoles()]);
+    await Promise.all([initResourceTypes(), loadAttrPermissions(), loadOperatorRoles()]);
   }
 
   // ── Resource-level permissions ─────────────────────────────────────────
 
-  async function loadResPermissions() {
-    const res = await fetch(`/admin/rbac/resource-permissions?resource_type=${currentResource}`);
-    resPermissions = await res.json();
-    renderResPermissions();
+  async function initResourceTypes() {
+    const res = await fetch('/admin/rbac/resource-permissions');
+    const all = await res.json();
+    resourceTypes = [...new Set(all.map(p => p.resource_type))].filter(rt => rt !== '*').sort();
+
+    const seg = document.getElementById('resourceSeg');
+    seg.innerHTML = '';
+    resourceTypes.forEach((rt, i) => {
+      const b = document.createElement('button');
+      b.className = 'seg-btn' + (i === 0 ? ' active' : '');
+      b.textContent = labelFor(rt);
+      b.onclick = () => selectResource(rt, b);
+      seg.appendChild(b);
+    });
+
+    currentResource = resourceTypes[0] || null;
+    renderResPermissions(all.filter(p => p.resource_type === currentResource));
   }
 
-  function renderResPermissions() {
+  async function loadResPermissions() {
+    const res = await fetch(`/admin/rbac/resource-permissions?resource_type=${currentResource}`);
+    renderResPermissions(await res.json());
+  }
+
+  function renderResPermissions(rows) {
+    resPermissions = rows;
     const container = document.getElementById('resPermContainer');
-    if (resPermissions.length === 0) {
-      container.innerHTML = '<div class="empty-state">No permission rows found — restart the API to seed defaults.</div>';
+    if (!rows || rows.length === 0) {
+      container.innerHTML = '<div class="empty-state">No permission rows — restart the API to seed defaults.</div>';
       return;
     }
 
@@ -202,7 +215,7 @@
     html += '</tr></thead><tbody>';
 
     roles.forEach(role => {
-      const perm = resPermissions.find(p => p.role_name === role.name);
+      const perm = rows.find(p => p.role_name === role.name);
       if (!perm) return;
       html += `<tr><td class="role-name-cell">${ROLE_LABELS[role.name] || role.name}</td>`;
       OPS.forEach(op => {
@@ -211,8 +224,7 @@
         html += `<td class="center">
           <div class="cb-wrap">
             <input type="checkbox" class="res-cb" ${checked}
-              data-id="${perm.id}" data-col="${col}"
-              onchange="onResCbChange(this)">
+              data-id="${perm.id}" data-col="${col}" onchange="onResCbChange(this)">
             <span class="cb-status" id="rcs-${perm.id}-${op}"></span>
           </div>
         </td>`;
@@ -229,7 +241,6 @@
     const col = cb.dataset.col;
     const value = cb.checked;
     const statusEl = document.getElementById(`rcs-${id}-${col.replace('can_','')}`);
-
     try {
       const res = await fetch(`/admin/rbac/resource-permissions/${id}`, {
         method: 'PATCH',
@@ -240,11 +251,10 @@
         const updated = await res.json();
         const idx = resPermissions.findIndex(p => p.id === id);
         if (idx >= 0) resPermissions[idx] = updated;
-        statusEl.textContent = '✓';
-        statusEl.className = 'cb-status ok';
+        statusEl.textContent = '✓'; statusEl.className = 'cb-status ok';
         setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'cb-status'; }, 1500);
       } else {
-        cb.checked = !value; // revert
+        cb.checked = !value;
         statusEl.textContent = '✗'; statusEl.className = 'cb-status err';
       }
     } catch {
@@ -253,11 +263,18 @@
     }
   }
 
-  // ── Attribute-level permissions ────────────────────────────────────────
+  function selectResource(rt, btn) {
+    currentResource = rt;
+    document.querySelectorAll('#resourceSeg .seg-btn').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    loadResPermissions();
+  }
+
+  // ── Attribute-level permissions (flat) ────────────────────────────────
 
   async function loadAttrPermissions() {
     document.getElementById('attrContainer').innerHTML = '<div class="empty-state">Loading…</div>';
-    const res = await fetch(`/admin/rbac/permissions?resource_type=${currentResource}`);
+    const res = await fetch('/admin/rbac/permissions');
     attrPermissions = await res.json();
     renderAttrPermissions();
   }
@@ -271,7 +288,7 @@
     badge.style.display = attrKeys.length > 0 ? '' : 'none';
 
     if (attrKeys.length === 0) {
-      container.innerHTML = `<div class="empty-state">No attributes found for <strong>${currentResource}</strong>.<br><br>Click <strong>Sync Attrs</strong> to discover attributes from the database.</div>`;
+      container.innerHTML = `<div class="empty-state">No attributes registered yet.<br><br>Click <strong>Sync Attrs</strong> to discover them from the database.</div>`;
       return;
     }
 
@@ -285,9 +302,8 @@
         const perm = attrPermissions.find(p => p.attr_key === key && p.role_name === role.name);
         const val = permValue(perm);
         const id = perm ? perm.id : null;
-        const cls = selectClass(val);
         html += `<td class="perm-cell">
-          <select class="perm-select ${cls}" data-id="${id}" data-key="${key}" data-role="${role.name}" onchange="onAttrSelectChange(this)">
+          <select class="perm-select ${selectClass(val)}" data-id="${id}" data-key="${key}" data-role="${role.name}" onchange="onAttrSelectChange(this)">
             <option value="none" ${val==='none'?'selected':''}>No Access</option>
             <option value="read" ${val==='read'?'selected':''}>Read Only</option>
             <option value="rw"   ${val==='rw'  ?'selected':''}>Read + Write</option>
@@ -308,9 +324,7 @@
     const id = sel.dataset.id;
     const key = sel.dataset.key;
     const role = sel.dataset.role;
-    const statusId = `cs-${id !== 'null' && id ? id : (key+'_'+role)}`;
-    const statusEl = document.getElementById(statusId);
-
+    const statusEl = document.getElementById(`cs-${id !== 'null' && id ? id : (key+'_'+role)}`);
     sel.className = `perm-select ${selectClass(val)}`;
 
     if (!id || id === 'null') {
@@ -351,7 +365,7 @@
     }
   }
 
-  // ── Operator role assignments ──────────────────────────────────────────
+  // ── Operator role assignments ─────────────────────────────────────────
 
   async function loadOperatorRoles() {
     const res = await fetch('/admin/rbac/operator-roles');
@@ -411,17 +425,6 @@
   async function removeOperatorRole(id) {
     const res = await fetch(`/admin/rbac/operator-roles/${id}`, { method: 'DELETE' });
     if (res.ok || res.status === 204) await loadOperatorRoles();
-  }
-
-  // ── Tab switching ──────────────────────────────────────────────────────
-
-  function selectResource(resource, btn) {
-    currentResource = resource;
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    btn.classList.add('active');
-    document.getElementById('filterInput').value = '';
-    // Reload both permission sections for the new resource type
-    Promise.all([loadResPermissions(), loadAttrPermissions()]);
   }
 
   function filterAttrTable() {

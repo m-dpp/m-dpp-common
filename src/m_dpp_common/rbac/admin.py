@@ -44,39 +44,22 @@ class ResourcePermissionUpdate(BaseModel):
     can_delete: bool | None = None
 
 
-def _discovery_sql(resource_tables: dict[str, type]):
-    """Build the `jsonb_object_keys` discovery UNION from {resource_type: model}."""
+def _attr_keys_sql(resource_tables: dict[str, type]):
+    """SQL selecting every distinct `attrs` key across the given entity tables.
+
+    Attribute ACLs are flat (keyed by name only), so the resource type each key came
+    from doesn't matter here — only the set of names in use.
+    """
     parts = []
-    for label, model in resource_tables.items():
+    for model in resource_tables.values():
         table = model.__tablename__
-        if not (label.isidentifier() and table.isidentifier()):
-            raise ValueError(f"unsafe identifier in resource_tables: {label!r}/{table!r}")
+        if not table.isidentifier():
+            raise ValueError(f"unsafe table name: {table!r}")
         parts.append(
-            f"SELECT DISTINCT '{label}' AS resource_type, jsonb_object_keys(attrs) AS attr_key "
+            f"SELECT DISTINCT jsonb_object_keys(attrs) AS attr_key "
             f"FROM {table} WHERE attrs IS NOT NULL"
         )
-    return text("\nUNION\n".join(parts) + "\nORDER BY resource_type, attr_key")
-
-
-def _expand_with_inheritance(
-    pairs, resource_order: list[str] | None
-) -> set[tuple[str, str]]:
-    """Fan each discovered (resource_type, attr_key) down to descendant resource types.
-
-    A key stored on a parent surfaces on every descendant through resolve-on-read
-    inheritance, and the attribute ACL is checked per *queried* resource type — so a
-    row must exist at each level for it to be governable there. `resource_order` is
-    the resource types from root to leaf (e.g. models → variants → batches → items);
-    a resource type not in it (or a None list) is left as-is.
-    """
-    order = resource_order or []
-    out: set[tuple[str, str]] = set()
-    for resource_type, attr_key in pairs:
-        out.add((resource_type, attr_key))
-        if resource_type in order:
-            for child in order[order.index(resource_type) + 1 :]:
-                out.add((child, attr_key))
-    return out
+    return text("\nUNION\n".join(parts) + "\nORDER BY attr_key")
 
 
 def make_rbac_router(
@@ -87,7 +70,6 @@ def make_rbac_router(
     operator_role_model,
     resource_permission_model,
     resource_tables: dict[str, type],
-    resource_order: list[str] | None = None,
     operator_model=None,
     prefix: str = "/admin/rbac",
 ) -> APIRouter:
@@ -95,7 +77,7 @@ def make_rbac_router(
     AttrPermission = attr_permission_model
     OperatorRole = operator_role_model
     ResourcePermission = resource_permission_model
-    discovery_sql = _discovery_sql(resource_tables)
+    attr_keys_sql = _attr_keys_sql(resource_tables)
 
     router = APIRouter(prefix=prefix, tags=["admin-rbac"])
 
@@ -109,15 +91,13 @@ def make_rbac_router(
         return [{"name": r.name, "description": r.description} for r in result.scalars().all()]
 
     @router.get("/permissions")
-    async def list_permissions(resource_type: str | None = None, db: AsyncSession = Depends(get_db)):
-        q = select(AttrPermission)
-        if resource_type:
-            q = q.where(AttrPermission.resource_type == resource_type)
-        result = await db.execute(q.order_by(AttrPermission.attr_key, AttrPermission.role_name))
+    async def list_permissions(db: AsyncSession = Depends(get_db)):
+        result = await db.execute(
+            select(AttrPermission).order_by(AttrPermission.attr_key, AttrPermission.role_name)
+        )
         return [
             {
                 "id": str(p.id),
-                "resource_type": p.resource_type,
                 "attr_key": p.attr_key,
                 "role_name": p.role_name,
                 "can_read": p.can_read,
@@ -144,7 +124,6 @@ def make_rbac_router(
         await db.refresh(obj)
         return {
             "id": str(obj.id),
-            "resource_type": obj.resource_type,
             "attr_key": obj.attr_key,
             "role_name": obj.role_name,
             "can_read": obj.can_read,
@@ -153,34 +132,25 @@ def make_rbac_router(
 
     @router.post("/sync-attrs")
     async def sync_attrs(db: AsyncSession = Depends(get_db)):
-        discovered = (await db.execute(discovery_sql)).fetchall()
+        discovered = [k for (k,) in (await db.execute(attr_keys_sql)).all()]
 
         roles_result = await db.execute(select(Role.name))
         role_names = [r for (r,) in roles_result.all()]
 
         existing_result = await db.execute(
-            select(
-                AttrPermission.resource_type,
-                AttrPermission.attr_key,
-                AttrPermission.role_name,
-            )
+            select(AttrPermission.attr_key, AttrPermission.role_name)
         )
-        existing = {(rt, ak, rn) for rt, ak, rn in existing_result.all()}
-
-        pairs = _expand_with_inheritance(
-            ((rt, ak) for rt, ak in discovered), resource_order
-        )
+        existing = {(ak, rn) for ak, rn in existing_result.all()}
 
         inserted = 0
-        for resource_type, attr_key in pairs:
+        for attr_key in discovered:
             for role_name in role_names:
-                if (resource_type, attr_key, role_name) not in existing:
+                if (attr_key, role_name) not in existing:
                     defaults = _DEFAULT_PERMISSIONS.get(
                         role_name, {"can_read": True, "can_write": False}
                     )
                     db.add(
                         AttrPermission(
-                            resource_type=resource_type,
                             attr_key=attr_key,
                             role_name=role_name,
                             can_read=defaults["can_read"],
@@ -192,11 +162,7 @@ def make_rbac_router(
         if inserted > 0:
             await db.commit()
 
-        return {
-            "inserted": inserted,
-            "discovered": len(discovered),
-            "with_inheritance": len(pairs),
-        }
+        return {"inserted": inserted, "discovered": len(discovered)}
 
     @router.get("/resource-permissions")
     async def list_resource_permissions(

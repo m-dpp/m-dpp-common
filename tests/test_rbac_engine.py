@@ -59,18 +59,18 @@ async def test_check_resource_permission_allows_when_any_row_true():
 async def test_filter_readable_drops_denied_keys():
     db = _db_returning([SimpleNamespace(attr_key="secret")])
     out = await _engine().filter_readable_attrs(
-        {"colour": "navy", "secret": "x"}, "public", "dpp_variants", db
+        {"colour": "navy", "secret": "x"}, "public", db
     )
     assert out == {"colour": "navy"}
 
 
 async def test_filter_readable_wildcard_denies_everything():
     db = _db_returning([SimpleNamespace(attr_key="*")])
-    out = await _engine().filter_readable_attrs({"a": 1, "b": 2}, "public", "dpp_variants", db)
+    out = await _engine().filter_readable_attrs({"a": 1, "b": 2}, "public", db)
     assert out == {}
 
 
 async def test_filter_passthrough_when_no_attrs():
     db = AsyncMock()
-    assert await _engine().filter_writable_attrs(None, "public", "x", db) is None
+    assert await _engine().filter_writable_attrs(None, "public", db) is None
     db.execute.assert_not_called()
