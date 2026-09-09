@@ -20,8 +20,13 @@ _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 _DEFAULT_PERMISSIONS: dict[str, dict] = {
     "public": {"can_read": True, "can_write": False},
     "end_user_professional": {"can_read": True, "can_write": False},
-    "recycler": {"can_read": True, "can_write": False},
+    "recycler": {"can_read": True, "can_write": False},    
     "supply_chain_professional": {"can_read": True, "can_write": True},
+    "economic_operator": {"can_read": True, "can_write": True},
+    "laboratory": {"can_read": True, "can_write": True},
+    "end_user_professional": {"can_read": True, "can_write": False},
+    
+    
     "authority": {"can_read": True, "can_write": False},
 }
 

@@ -12,13 +12,15 @@ _role_header = APIKeyHeader(name="X-Dev-Role", auto_error=False)
 VALID_ROLES = {
     "public",
     "end_user_professional",
-    "recycler",
+    "recycler",    
     "supply_chain_professional",
     "authority",
+    "economic_operator",
+    "laboratory",    
 }
 
 # Dev posture: unknown/absent role falls back to a privileged role (default-allow).
-DEFAULT_ROLE = "supply_chain_professional"
+DEFAULT_ROLE = "economic_operator"
 
 
 async def get_principal(role: str | None = Security(_role_header)) -> dict:

@@ -9,10 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 JRC_ROLES: list[tuple[str, str]] = [
     ("public", "Public access — read-only, restricted attributes"),
-    ("end_user_professional", "End-user professional (e.g. retailer, stylist)"),
+    ("end_user_professional", "End-user professional (e.g. retailer, stylist)"),    
     ("recycler", "End-of-life operator / recycler"),
     ("supply_chain_professional", "Supply chain professional — full read/write"),
     ("authority", "Regulatory authority — full read access"),
+    ("economic_operator", "Economic operator — full read/write"),
+    ("laboratory", "Laboratory (e.g CoE HAN BioCentre)"),    
 ]
 
 

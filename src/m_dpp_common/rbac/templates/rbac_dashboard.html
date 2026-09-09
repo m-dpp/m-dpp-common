@@ -123,14 +123,25 @@
   let resourceTypes = [];       // discovered from the resource-permissions rows
   let currentResource = null;
 
-  const ROLE_ORDER = ['public','end_user_professional','recycler','supply_chain_professional','authority'];
+  const ROLE_ORDER = [
+      'public',
+      'end_user_professional',
+      'recycler',
+      'supply_chain_professional',
+      'authority',
+      'economic_operator',
+      'laboratory',];
+
   const ROLE_LABELS = {
     public: 'Public',
     end_user_professional: 'End User Professional',
     recycler: 'Recycler',
     supply_chain_professional: 'Supply Chain Pro',
     authority: 'Authority',
+    economic_operator: 'Economic Operator',
+    laboratory: 'Laboratory',
   };
+  
   const OPS = ['list','read','create','update','delete'];
 
   function labelFor(rt) {
