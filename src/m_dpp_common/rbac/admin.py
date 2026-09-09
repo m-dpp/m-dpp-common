@@ -62,7 +62,7 @@ def _attr_keys_sql(resource_tables: dict[str, type]):
             raise ValueError(f"unsafe table name: {table!r}")
         parts.append(
             f"SELECT DISTINCT jsonb_object_keys(attrs) AS attr_key "
-            f"FROM {table} WHERE attrs IS NOT NULL"
+            f"FROM {table} WHERE jsonb_typeof(attrs) = 'object'"
         )
     return text("\nUNION\n".join(parts) + "\nORDER BY attr_key")
 

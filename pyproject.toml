@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "m-dpp-common"
-version = "0.4.0"
-description = "Shared infrastructure for the mDPP services: GS1 identifiers, DB plumbing, ORM mixins, auth stub, RBAC engine. Infrastructure only — no domain logic."
+version = "0.5.0"
+description = "Shared infrastructure for the mDPP services: GS1 identifiers, DB plumbing, ORM mixins, auth stub, RBAC engine, Operator entity. Infrastructure only — no domain logic."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi",

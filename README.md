@@ -11,6 +11,7 @@ Only cross-cutting *plumbing* that must not diverge between services:
 - `m_dpp_common.orm` — `Base`-agnostic SQLAlchemy mixins (UUID PK, timestamps, soft-delete, `attrs`).
 - `m_dpp_common.auth` — the **dev auth stub** (`X-Dev-Role` header → principal). Swap for real OIDC/JWT here, once, later.
 - `m_dpp_common.rbac` — the two-layer RBAC **engine** (resource gate + attribute filter), role seed data, and a parametrised admin router + dashboard.
+- `m_dpp_common.operator` — the **Operator entity** (a GS1 party anchored by GLN, referenced by RBAC `operator_roles`): a `Base`-agnostic `OperatorMixin`, the `OperatorCreate` / `OperatorUpdate` schemas, and a parametrised `/operators` CRUD router. Each service binds the table to its own `Base` and mounts the router against its own database and `@context`.
 
 ## What must NOT come here
 

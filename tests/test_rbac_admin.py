@@ -16,8 +16,10 @@ def test_attr_keys_sql_unions_all_tables_without_resource_labels():
         )
     )
     assert sql.count("jsonb_object_keys(attrs)") == 2
-    assert "FROM dpp_models WHERE attrs IS NOT NULL" in sql
-    assert "FROM dpp_items WHERE attrs IS NOT NULL" in sql
+    # Guard on jsonb_typeof so rows whose `attrs` is a JSON scalar/null (not an
+    # object) are skipped — `jsonb_object_keys` errors on those.
+    assert "FROM dpp_models WHERE jsonb_typeof(attrs) = 'object'" in sql
+    assert "FROM dpp_items WHERE jsonb_typeof(attrs) = 'object'" in sql
     assert "resource_type" not in sql
     assert sql.strip().endswith("ORDER BY attr_key")
 
