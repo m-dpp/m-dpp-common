@@ -2,7 +2,7 @@ from m_dpp_common.rbac.admin import make_rbac_router
 from m_dpp_common.rbac.engine import RbacEngine
 from m_dpp_common.rbac.models import (
     AttrPermissionMixin,
-    OperatorRoleMixin,
+    OrganisationRoleMixin,
     ResourcePermissionMixin,
     RoleMixin,
 )
@@ -13,7 +13,7 @@ __all__ = [
     "RbacEngine",
     "RoleMixin",
     "AttrPermissionMixin",
-    "OperatorRoleMixin",
+    "OrganisationRoleMixin",
     "ResourcePermissionMixin",
     "JRC_ROLES",
     "seed_rbac",

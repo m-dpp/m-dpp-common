@@ -8,7 +8,7 @@ The mixins carry ``__tablename__`` and ``__table_args__`` so the subclass stays 
 
 import uuid
 
-from sqlalchemy import Boolean, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,12 +38,25 @@ class AttrPermissionMixin:
     can_write: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
-class OperatorRoleMixin:
-    __tablename__ = "operator_roles"
-    __table_args__ = (UniqueConstraint("operator_gln", "role_name", name="uq_operator_role"),)
+class OrganisationRoleMixin:
+    """Which roles an organisation holds. An organisation's *nature* (manufacturer,
+    laboratory, authority…) is expressed here and nowhere else.
+
+    Keyed on the organisation's surrogate ``id``, not its GLN: a GLN is optional
+    (it lives in ``organisations.attrs["gln"]``) and so cannot be a reliable key.
+    """
+
+    __tablename__ = "organisation_roles"
+    __table_args__ = (
+        UniqueConstraint("organisation_id", "role_name", name="uq_organisation_role"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    operator_gln: Mapped[str] = mapped_column(String, nullable=False)
+    organisation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organisations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     role_name: Mapped[str] = mapped_column(String, nullable=False)
 
 

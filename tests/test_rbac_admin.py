@@ -35,7 +35,7 @@ def test_make_rbac_router_mounts_expected_paths():
         get_db=lambda: None,
         role_model=Role,
         attr_permission_model=_model("attr_permissions"),
-        operator_role_model=_model("operator_roles"),
+        organisation_role_model=_model("organisation_roles"),
         resource_permission_model=_model("resource_permissions"),
         resource_tables={"roles": Role},
     )
@@ -43,3 +43,5 @@ def test_make_rbac_router_mounts_expected_paths():
     assert "/admin/rbac/sync-attrs" in paths
     assert "/admin/rbac/permissions" in paths
     assert "/admin/rbac/resource-permissions/{permission_id}" in paths
+    assert "/admin/rbac/organisation-roles" in paths
+    assert "/admin/rbac/organisation-roles/{assignment_id}" in paths

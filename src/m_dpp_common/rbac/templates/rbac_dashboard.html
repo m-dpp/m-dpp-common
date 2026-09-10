@@ -99,17 +99,17 @@
   <div id="attrContainer"><div class="empty-state">Loading…</div></div>
 </div>
 
-<!-- 3. Operator role assignments -->
+<!-- 3. Organisation role assignments -->
 <div class="card">
   <div class="card-header">
-    <h2>Operator Role Assignments</h2>
+    <h2>Organisation Role Assignments</h2>
     <span id="opRoleCount" class="badge" style="display:none"></span>
   </div>
   <div id="opRoleContainer"><div class="empty-state">Loading…</div></div>
   <div class="add-row">
-    <select id="addOpGln" style="min-width:220px"><option value="">Select operator…</option></select>
+    <select id="addOrgId" style="min-width:220px"><option value="">Select organisation…</option></select>
     <select id="addRoleName" style="min-width:180px"><option value="">Select role…</option></select>
-    <button class="btn btn-primary" onclick="addOperatorRole()">Assign Role</button>
+    <button class="btn btn-primary" onclick="addOrganisationRole()">Assign Role</button>
     <span id="addRoleStatus" style="font-size:0.82rem;margin-left:0.3rem"></span>
   </div>
 </div>
@@ -118,8 +118,8 @@
   let roles = [];
   let attrPermissions = [];
   let resPermissions = [];
-  let operatorRoles = [];
-  let operators = [];
+  let organisationRoles = [];
+  let organisations = [];
   let resourceTypes = [];       // discovered from the resource-permissions rows
   let currentResource = null;
 
@@ -158,10 +158,10 @@
     const rolesRes = await fetch('/admin/rbac/roles');
     const rolesData = await rolesRes.json();
     try {
-      const opsRes = await fetch('/operators');
-      operators = opsRes.ok ? await opsRes.json() : [];
+      const opsRes = await fetch('/organisations');
+      organisations = opsRes.ok ? await opsRes.json() : [];
     } catch (_) {
-      operators = [];
+      organisations = [];
     }
 
     roles = ROLE_ORDER
@@ -169,11 +169,12 @@
       .map(n => rolesData.find(r => r.name === n))
       .concat(rolesData.filter(r => !ROLE_ORDER.includes(r.name)));
 
-    const opSel = document.getElementById('addOpGln');
-    operators.forEach(op => {
+    const opSel = document.getElementById('addOrgId');
+    organisations.forEach(org => {
+      const gln = org.attrs && org.attrs.gln;
       const o = document.createElement('option');
-      o.value = op.gln || op.id;
-      o.textContent = `${op.name || op.gln} (${op.gln || ''})`;
+      o.value = org.id;
+      o.textContent = gln ? `${org.name} (${gln})` : org.name;
       opSel.appendChild(o);
     });
     const roleSel = document.getElementById('addRoleName');
@@ -184,7 +185,7 @@
       roleSel.appendChild(o);
     });
 
-    await Promise.all([initResourceTypes(), loadAttrPermissions(), loadOperatorRoles()]);
+    await Promise.all([initResourceTypes(), loadAttrPermissions(), loadOrganisationRoles()]);
   }
 
   // ── Resource-level permissions ─────────────────────────────────────────
@@ -376,56 +377,64 @@
     }
   }
 
-  // ── Operator role assignments ─────────────────────────────────────────
+  // ── Organisation role assignments ─────────────────────────────────────
+  // Keyed on the organisation's internal id — a GLN is optional (attrs.gln) and
+  // so cannot identify an organisation. GLN is shown as a hint only.
 
-  async function loadOperatorRoles() {
-    const res = await fetch('/admin/rbac/operator-roles');
-    operatorRoles = await res.json();
-    renderOperatorRoles();
+  async function loadOrganisationRoles() {
+    const res = await fetch('/admin/rbac/organisation-roles');
+    organisationRoles = await res.json();
+    renderOrganisationRoles();
   }
 
-  function renderOperatorRoles() {
+  function renderOrganisationRoles() {
     const container = document.getElementById('opRoleContainer');
     const badge = document.getElementById('opRoleCount');
-    const byGln = {};
-    operatorRoles.forEach(a => {
-      if (!byGln[a.operator_gln]) byGln[a.operator_gln] = { name: a.operator_name, roles: [] };
-      byGln[a.operator_gln].roles.push({ id: a.id, role_name: a.role_name });
+    const byOrg = {};
+    organisationRoles.forEach(a => {
+      if (!byOrg[a.organisation_id]) {
+        byOrg[a.organisation_id] = {
+          name: a.organisation_name,
+          gln: a.organisation_gln,
+          roles: [],
+        };
+      }
+      byOrg[a.organisation_id].roles.push({ id: a.id, role_name: a.role_name });
     });
-    const glns = Object.keys(byGln);
-    badge.textContent = `${glns.length} operator${glns.length!==1?'s':''}`;
-    badge.style.display = glns.length > 0 ? '' : 'none';
-    if (glns.length === 0) {
-      container.innerHTML = '<div class="empty-state">No role assignments yet. Use the form below to assign roles to operators.</div>';
+    const ids = Object.keys(byOrg);
+    badge.textContent = `${ids.length} organisation${ids.length!==1?'s':''}`;
+    badge.style.display = ids.length > 0 ? '' : 'none';
+    if (ids.length === 0) {
+      container.innerHTML = '<div class="empty-state">No role assignments yet. Use the form below to assign roles to organisations.</div>';
       return;
     }
-    let html = '<table><thead><tr><th>GLN</th><th>Operator Name</th><th>Assigned Roles</th></tr></thead><tbody>';
-    glns.sort().forEach(gln => {
-      const { name, roles: assigned } = byGln[gln];
+    let html = '<table><thead><tr><th>Organisation</th><th>GLN</th><th>Assigned Roles</th></tr></thead><tbody>';
+    ids.sort((a, b) => (byOrg[a].name||'').localeCompare(byOrg[b].name||'')).forEach(id => {
+      const { name, gln, roles: assigned } = byOrg[id];
       const tags = assigned.map(a =>
         `<span class="role-tag">${ROLE_LABELS[a.role_name]||a.role_name}
-          <button onclick="removeOperatorRole('${a.id}')" title="Remove">×</button>
+          <button onclick="removeOrganisationRole('${a.id}')" title="Remove">×</button>
         </span>`
       ).join('');
-      html += `<tr><td class="op-gln">${gln}</td><td class="op-name">${name||'—'}</td><td>${tags}</td></tr>`;
+      html += `<tr><td class="op-name">${name||'—'}</td><td class="op-gln">${gln||'—'}</td><td>${tags}</td></tr>`;
     });
     html += '</tbody></table>';
     container.innerHTML = html;
   }
 
-  async function addOperatorRole() {
-    const gln = document.getElementById('addOpGln').value;
+  async function addOrganisationRole() {
+    const orgId = document.getElementById('addOrgId').value;
     const role = document.getElementById('addRoleName').value;
     const status = document.getElementById('addRoleStatus');
-    if (!gln || !role) { status.textContent = 'Select both an operator and a role.'; status.style.color='#dc3545'; return; }
-    const res = await fetch('/admin/rbac/operator-roles', {
+    if (!orgId || !role) { status.textContent = 'Select both an organisation and a role.'; status.style.color='#dc3545'; return; }
+    const res = await fetch('/admin/rbac/organisation-roles', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ operator_gln: gln, role_name: role }),
+      body: JSON.stringify({ organisation_id: orgId, role_name: role }),
     });
     if (res.ok) {
       status.textContent = '✓ Assigned'; status.style.color = '#198754';
       setTimeout(() => { status.textContent = ''; }, 2000);
-      await loadOperatorRoles();
+      await loadOrganisationRoles();
     } else if (res.status === 409) {
       status.textContent = 'Already assigned.'; status.style.color = '#dc3545';
     } else {
@@ -433,9 +442,9 @@
     }
   }
 
-  async function removeOperatorRole(id) {
-    const res = await fetch(`/admin/rbac/operator-roles/${id}`, { method: 'DELETE' });
-    if (res.ok || res.status === 204) await loadOperatorRoles();
+  async function removeOrganisationRole(id) {
+    const res = await fetch(`/admin/rbac/organisation-roles/${id}`, { method: 'DELETE' });
+    if (res.ok || res.status === 204) await loadOrganisationRoles();
   }
 
   function filterAttrTable() {

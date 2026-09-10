@@ -1,7 +1,7 @@
 """A parametrised `/admin/rbac` router + dashboard.
 
 `dpp-app` and `mdpp-app` differ only in which resource tables carry an `attrs`
-bag and whether an Operator entity exists, so those are constructor arguments.
+bag and whether an Organisation entity exists, so those are constructor arguments.
 """
 
 import uuid
@@ -36,8 +36,8 @@ class AttrPermissionUpdate(BaseModel):
     can_write: bool | None = None
 
 
-class OperatorRoleCreate(BaseModel):
-    operator_gln: str
+class OrganisationRoleCreate(BaseModel):
+    organisation_id: uuid.UUID
     role_name: str
 
 
@@ -72,15 +72,15 @@ def make_rbac_router(
     get_db,
     role_model,
     attr_permission_model,
-    operator_role_model,
+    organisation_role_model,
     resource_permission_model,
     resource_tables: dict[str, type],
-    operator_model=None,
+    organisation_model=None,
     prefix: str = "/admin/rbac",
 ) -> APIRouter:
     Role = role_model
     AttrPermission = attr_permission_model
-    OperatorRole = operator_role_model
+    OrganisationRole = organisation_role_model
     ResourcePermission = resource_permission_model
     attr_keys_sql = _attr_keys_sql(resource_tables)
 
@@ -220,50 +220,69 @@ def make_rbac_router(
             "can_delete": obj.can_delete,
         }
 
-    @router.get("/operator-roles")
-    async def list_operator_roles(db: AsyncSession = Depends(get_db)):
+    @router.get("/organisation-roles")
+    async def list_organisation_roles(db: AsyncSession = Depends(get_db)):
         result = await db.execute(
-            select(OperatorRole).order_by(OperatorRole.operator_gln, OperatorRole.role_name)
+            select(OrganisationRole).order_by(
+                OrganisationRole.organisation_id, OrganisationRole.role_name
+            )
         )
         assignments = result.scalars().all()
 
-        name_by_gln: dict[str, str] = {}
-        if operator_model is not None and assignments:
-            glns = list({a.operator_gln for a in assignments})
-            ops_result = await db.execute(
-                select(operator_model).where(operator_model.gln.in_(glns))
+        # Decorate with the organisation's name and (optional) GLN for display.
+        info_by_id: dict[uuid.UUID, tuple[str, str | None]] = {}
+        if organisation_model is not None and assignments:
+            org_ids = list({a.organisation_id for a in assignments})
+            orgs_result = await db.execute(
+                select(organisation_model).where(organisation_model.id.in_(org_ids))
             )
-            name_by_gln = {op.gln: op.name for op in ops_result.scalars().all()}
+            info_by_id = {
+                org.id: (org.name, (org.attrs or {}).get("gln"))
+                for org in orgs_result.scalars().all()
+            }
 
         return [
             {
                 "id": str(a.id),
-                "operator_gln": a.operator_gln,
-                "operator_name": name_by_gln.get(a.operator_gln),
+                "organisation_id": str(a.organisation_id),
+                "organisation_name": info_by_id.get(a.organisation_id, (None, None))[0],
+                "organisation_gln": info_by_id.get(a.organisation_id, (None, None))[1],
                 "role_name": a.role_name,
             }
             for a in assignments
         ]
 
-    @router.post("/operator-roles", status_code=201)
-    async def create_operator_role(
-        body: OperatorRoleCreate, db: AsyncSession = Depends(get_db)
+    @router.post("/organisation-roles", status_code=201)
+    async def create_organisation_role(
+        body: OrganisationRoleCreate, db: AsyncSession = Depends(get_db)
     ):
-        obj = OperatorRole(operator_gln=body.operator_gln, role_name=body.role_name)
+        obj = OrganisationRole(
+            organisation_id=body.organisation_id, role_name=body.role_name
+        )
         db.add(obj)
         try:
             await db.commit()
         except IntegrityError:
             await db.rollback()
-            raise HTTPException(status_code=409, detail="This operator already has that role")
+            # Either the pair already exists, or the FK points at no organisation.
+            raise HTTPException(
+                status_code=409,
+                detail="This organisation already has that role, or it does not exist",
+            )
         await db.refresh(obj)
-        return {"id": str(obj.id), "operator_gln": obj.operator_gln, "role_name": obj.role_name}
+        return {
+            "id": str(obj.id),
+            "organisation_id": str(obj.organisation_id),
+            "role_name": obj.role_name,
+        }
 
-    @router.delete("/operator-roles/{assignment_id}", status_code=204)
-    async def delete_operator_role(
+    @router.delete("/organisation-roles/{assignment_id}", status_code=204)
+    async def delete_organisation_role(
         assignment_id: uuid.UUID, db: AsyncSession = Depends(get_db)
     ):
-        result = await db.execute(select(OperatorRole).where(OperatorRole.id == assignment_id))
+        result = await db.execute(
+            select(OrganisationRole).where(OrganisationRole.id == assignment_id)
+        )
         obj = result.scalar_one_or_none()
         if obj is None:
             raise HTTPException(status_code=404, detail="Assignment not found")
