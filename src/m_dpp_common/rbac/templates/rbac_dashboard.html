@@ -11,15 +11,15 @@
     h2 { font-size: 0.95rem; font-weight: 600; margin: 0; color: #444; }
     .header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
     .header-actions { display: flex; align-items: center; gap: 0.6rem; margin-left: auto; }
-    .filter-input { padding: 0.35rem 0.6rem; border: 1px solid #ccc; border-radius: 5px; font-size: 0.85rem; width: 190px; }
-    .filter-input:focus { outline: none; border-color: #0066cc; box-shadow: 0 0 0 2px #0066cc22; }
+    .filter-input, .text-input { padding: 0.35rem 0.6rem; border: 1px solid #ccc; border-radius: 5px; font-size: 0.85rem; }
+    .filter-input { width: 190px; }
+    .filter-input:focus, .text-input:focus { outline: none; border-color: #0066cc; box-shadow: 0 0 0 2px #0066cc22; }
     .btn { padding: 0.35rem 0.9rem; border: 1px solid #ccc; border-radius: 5px; cursor: pointer; font-size: 0.85rem; background: #fff; }
     .btn:hover { background: #f0f0f0; }
     .btn-primary { background: #0066cc; color: #fff; border-color: #0055aa; }
     .btn-primary:hover { background: #0055aa; }
     .btn-danger { background: #fff; color: #dc3545; border-color: #dc3545; padding: 0.15rem 0.5rem; font-size: 0.75rem; }
     .btn-danger:hover { background: #dc3545; color: #fff; }
-    /* Segmented control — selects the resource type for the Resource Access card */
     .seg { display: inline-flex; border: 1px solid #ccc; border-radius: 6px; overflow: hidden; }
     .seg-btn { padding: 0.3rem 0.8rem; border: none; border-left: 1px solid #ddd; background: #fff; cursor: pointer; font-size: 0.8rem; color: #555; }
     .seg-btn:first-child { border-left: none; }
@@ -33,38 +33,43 @@
     table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
     thead th { background: #f5f5f5; padding: 0.5rem 0.85rem; text-align: left; font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; color: #666; border-bottom: 2px solid #e0e0e0; white-space: nowrap; }
     thead th.center { text-align: center; }
+    thead th.inactive { color: #aaa; text-decoration: line-through; }
     tbody tr { border-bottom: 1px solid #efefef; }
     tbody tr:last-child { border-bottom: none; }
     tbody tr:hover { background: #fafafa; }
     td { padding: 0.45rem 0.85rem; }
     td.center { text-align: center; }
-    td.attr-key { font-family: ui-monospace, monospace; font-size: 0.82rem; color: #333; min-width: 160px; }
+    td.attr-key { font-family: ui-monospace, monospace; font-size: 0.82rem; color: #333; min-width: 160px; white-space: nowrap; }
     td.perm-cell { white-space: nowrap; }
+    td.muted { color: #888; font-size: 0.82rem; }
     select.perm-select { border: 1px solid #ccc; border-radius: 4px; padding: 0.2rem 0.35rem; font-size: 0.8rem; background: #fff; cursor: pointer; }
     select.perm-select.access-none { color: #888; }
     select.perm-select.access-read { color: #0066cc; }
     select.perm-select.access-rw { color: #198754; font-weight: 600; }
-    input[type=checkbox].res-cb { width: 1rem; height: 1rem; cursor: pointer; accent-color: #0066cc; }
-    input[type=checkbox].res-cb:disabled { cursor: not-allowed; opacity: 0.4; }
+    input[type=checkbox].res-cb, input[type=checkbox].role-cb { width: 1rem; height: 1rem; cursor: pointer; accent-color: #0066cc; }
     .cb-wrap { display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
-    .cb-status { font-size: 0.72rem; }
-    .cb-status.ok { color: #198754; }
-    .cb-status.err { color: #dc3545; }
-    .cell-status { display: inline-block; font-size: 0.75rem; margin-left: 0.3rem; width: 1.2em; }
-    .cell-status.ok { color: #198754; }
-    .cell-status.err { color: #dc3545; }
+    .cb-status, .cell-status { font-size: 0.72rem; display: inline-block; min-width: 1em; }
+    .cb-status.ok, .cell-status.ok { color: #198754; }
+    .cb-status.err, .cell-status.err { color: #dc3545; }
+    .cell-status { margin-left: 0.3rem; }
     .empty-state { text-align: center; padding: 2.5rem 1rem; color: #888; }
     .empty-state strong { color: #555; }
     .badge { display: inline-block; font-size: 0.7rem; padding: 0.1rem 0.45rem; border-radius: 3px; background: #e8f0fe; color: #0066cc; font-weight: 600; }
+    .badge.manual { background: #fff3cd; color: #8a6d00; }
+    .badge.discovered { background: #e6f4ea; color: #1e7e34; }
+    .badge.inactive { background: #f1f1f1; color: #888; }
     .hint { font-size: 0.8rem; color: #888; }
     .role-tag { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; padding: 0.15rem 0.5rem; border-radius: 3px; background: #e8f0fe; color: #0066cc; margin: 0.1rem; }
     .role-tag button { background: none; border: none; cursor: pointer; color: #0066cc; font-size: 0.75rem; padding: 0; line-height: 1; }
     .role-tag button:hover { color: #dc3545; }
-    .add-row { padding: 0.6rem 0.85rem; display: flex; gap: 0.5rem; align-items: center; border-top: 1px solid #efefef; background: #fafafa; }
+    .add-row { padding: 0.6rem 0.85rem; display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; border-top: 1px solid #efefef; background: #fafafa; }
     .add-row select { padding: 0.3rem 0.5rem; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem; }
+    .add-status { font-size: 0.82rem; margin-left: 0.3rem; }
     td.op-name { color: #555; font-size: 0.82rem; }
     td.op-gln { font-family: ui-monospace, monospace; font-size: 0.82rem; }
     td.role-name-cell { font-size: 0.85rem; font-weight: 500; min-width: 180px; }
+    td.role-name-cell code { font-size: 0.75rem; color: #888; font-weight: 400; margin-left: 0.3rem; }
+    tr.inactive td { color: #aaa; }
   </style>
 </head>
 <body>
@@ -79,7 +84,24 @@
 
 <div class="status-bar" id="statusBar"></div>
 
-<!-- 1. Resource-level access (coarse gate) — per resource type -->
+<!-- 1. Roles — data, addable at runtime -->
+<div class="card">
+  <div class="card-header">
+    <h2>Roles</h2>
+    <span id="roleCount" class="badge" style="display:none"></span>
+    <span class="hint" style="margin-left:auto">roles are data — adding one fans out default permission rows (see / read, no writes); inactive roles are refused (403)</span>
+  </div>
+  <div id="roleContainer"><div class="empty-state">Loading…</div></div>
+  <div class="add-row">
+    <input class="text-input" id="newRoleName" placeholder="role_name (snake_case)" style="width:220px" autocomplete="off">
+    <input class="text-input" id="newRoleLabel" placeholder="Label" style="width:180px" autocomplete="off">
+    <input class="text-input" id="newRoleDesc" placeholder="Description" style="width:280px" autocomplete="off">
+    <button class="btn btn-primary" onclick="addRole()">Add Role</button>
+    <span id="addRoleStatus2" class="add-status"></span>
+  </div>
+</div>
+
+<!-- 2. Resource-level access (coarse gate) — per resource type -->
 <div class="card">
   <div class="card-header">
     <h2>Resource Access</h2>
@@ -89,17 +111,25 @@
   <div id="resPermContainer"><div class="empty-state">Loading…</div></div>
 </div>
 
-<!-- 2. Attribute-level access (fine filter) — flat: one rule per attribute name -->
+<!-- 3. Attribute-level access (fine filter) — per entity type -->
 <div class="card">
   <div class="card-header">
     <h2>Attribute Access</h2>
     <span id="attrCount" class="badge" style="display:none"></span>
-    <span class="hint" style="margin-left:auto">one rule per attribute name — it applies wherever that key appears, at any level</span>
+    <span class="hint">one rule per (entity type, attribute, role) — applied after inheritance is resolved</span>
+    <div class="seg" id="entitySeg" style="margin-left:auto"></div>
   </div>
   <div id="attrContainer"><div class="empty-state">Loading…</div></div>
+  <div class="add-row">
+    <span class="hint">Register an attribute for <strong id="addAttrEntity">…</strong> (e.g. a computed field that is never stored):</span>
+    <input class="text-input" id="newAttrKey" placeholder="attribute key" style="width:200px" autocomplete="off">
+    <input class="text-input" id="newAttrDesc" placeholder="Description (optional)" style="width:260px" autocomplete="off">
+    <button class="btn btn-primary" onclick="addAttribute()">Add Attribute</button>
+    <span id="addAttrStatus" class="add-status"></span>
+  </div>
 </div>
 
-<!-- 3. Organisation role assignments -->
+<!-- 4. Organisation role assignments -->
 <div class="card">
   <div class="card-header">
     <h2>Organisation Role Assignments</h2>
@@ -110,64 +140,38 @@
     <select id="addOrgId" style="min-width:220px"><option value="">Select organisation…</option></select>
     <select id="addRoleName" style="min-width:180px"><option value="">Select role…</option></select>
     <button class="btn btn-primary" onclick="addOrganisationRole()">Assign Role</button>
-    <span id="addRoleStatus" style="font-size:0.82rem;margin-left:0.3rem"></span>
+    <span id="addRoleStatus" class="add-status"></span>
   </div>
 </div>
 
 <script>
-  let roles = [];
-  let attrPermissions = [];
+  // Everything below is driven by the API — there is no hardcoded role or entity list.
+  let roles = [];               // [{name,label,description,active,sort_order}]
+  let attributes = [];          // registry rows for currentEntity
+  let attrPermissions = [];     // permission rows for currentEntity
   let resPermissions = [];
   let organisationRoles = [];
   let organisations = [];
-  let resourceTypes = [];       // discovered from the resource-permissions rows
+  let resourceTypes = [];       // from resource-permissions rows
+  let entityTypes = [];         // from /entity-types
   let currentResource = null;
+  let currentEntity = null;
 
-  const ROLE_ORDER = [
-      'public',
-      'end_user_professional',
-      'recycler',
-      'supply_chain_professional',
-      'authority',
-      'economic_operator',
-      'laboratory',];
-
-  const ROLE_LABELS = {
-    public: 'Public',
-    end_user_professional: 'End User Professional',
-    recycler: 'Recycler',
-    supply_chain_professional: 'Supply Chain Pro',
-    authority: 'Authority',
-    economic_operator: 'Economic Operator',
-    laboratory: 'Laboratory',
-  };
-  
   const OPS = ['list','read','create','update','delete'];
+  const roleLabel = name => { const r = roles.find(x => x.name === name); return (r && r.label) || name; };
+  const labelFor = s => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const setStatus = (el, text, ok) => { el.textContent = text; el.style.color = ok ? '#198754' : '#dc3545'; if (ok) setTimeout(() => { el.textContent = ''; }, 2500); };
 
-  function labelFor(rt) {
-    return rt.replace(/^dpp_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  }
-  function permValue(p) {
-    if (!p) return 'read';
-    if (!p.can_read) return 'none';
-    return p.can_write ? 'rw' : 'read';
-  }
+  function permValue(p) { if (!p) return 'read'; if (!p.can_read) return 'none'; return p.can_write ? 'rw' : 'read'; }
   function selectClass(v) { return v==='none'?'access-none':v==='read'?'access-read':'access-rw'; }
 
   async function init() {
-    const rolesRes = await fetch('/admin/rbac/roles');
-    const rolesData = await rolesRes.json();
+    await loadRoles();
     try {
       const opsRes = await fetch('/organisations');
       organisations = opsRes.ok ? await opsRes.json() : [];
-    } catch (_) {
-      organisations = [];
-    }
-
-    roles = ROLE_ORDER
-      .filter(n => rolesData.some(r => r.name === n))
-      .map(n => rolesData.find(r => r.name === n))
-      .concat(rolesData.filter(r => !ROLE_ORDER.includes(r.name)));
+    } catch (_) { organisations = []; }
 
     const opSel = document.getElementById('addOrgId');
     organisations.forEach(org => {
@@ -177,15 +181,78 @@
       o.textContent = gln ? `${org.name} (${gln})` : org.name;
       opSel.appendChild(o);
     });
+
+    await Promise.all([initResourceTypes(), initEntityTypes(), loadOrganisationRoles()]);
+  }
+
+  // ── Roles ──────────────────────────────────────────────────────────────
+
+  async function loadRoles() {
+    const res = await fetch('/admin/rbac/roles');
+    roles = await res.json();
+    renderRoles();
     const roleSel = document.getElementById('addRoleName');
-    roles.forEach(r => {
+    roleSel.innerHTML = '<option value="">Select role…</option>';
+    roles.filter(r => r.active).forEach(r => {
       const o = document.createElement('option');
-      o.value = r.name;
-      o.textContent = ROLE_LABELS[r.name] || r.name;
+      o.value = r.name; o.textContent = r.label || r.name;
       roleSel.appendChild(o);
     });
+  }
 
-    await Promise.all([initResourceTypes(), loadAttrPermissions(), loadOrganisationRoles()]);
+  function renderRoles() {
+    const container = document.getElementById('roleContainer');
+    const badge = document.getElementById('roleCount');
+    badge.textContent = `${roles.length} role${roles.length !== 1 ? 's' : ''}`;
+    badge.style.display = roles.length ? '' : 'none';
+    if (!roles.length) { container.innerHTML = '<div class="empty-state">No roles yet — add one below (the API seeds defaults on boot).</div>'; return; }
+    let html = '<table><thead><tr><th>Name</th><th>Label</th><th>Description</th><th class="center">Active</th></tr></thead><tbody>';
+    roles.forEach(r => {
+      html += `<tr class="${r.active ? '' : 'inactive'}">
+        <td class="attr-key">${esc(r.name)}</td>
+        <td>${esc(r.label || '')}</td>
+        <td class="muted">${esc(r.description)}</td>
+        <td class="center"><div class="cb-wrap">
+          <input type="checkbox" class="role-cb" ${r.active ? 'checked' : ''} data-name="${esc(r.name)}" onchange="onRoleActiveChange(this)">
+          <span class="cb-status" id="rs-${esc(r.name)}"></span>
+        </div></td></tr>`;
+    });
+    container.innerHTML = html + '</tbody></table>';
+  }
+
+  async function onRoleActiveChange(cb) {
+    const name = cb.dataset.name, statusEl = document.getElementById(`rs-${name}`);
+    const res = await fetch(`/admin/rbac/roles/${encodeURIComponent(name)}`, {
+      method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ active: cb.checked }),
+    });
+    if (res.ok) { statusEl.textContent = '✓'; statusEl.className = 'cb-status ok'; await refreshAll(); }
+    else { cb.checked = !cb.checked; statusEl.textContent = '✗'; statusEl.className = 'cb-status err'; }
+  }
+
+  async function addRole() {
+    const name = document.getElementById('newRoleName').value.trim();
+    const label = document.getElementById('newRoleLabel').value.trim();
+    const description = document.getElementById('newRoleDesc').value.trim();
+    const status = document.getElementById('addRoleStatus2');
+    if (!name) { setStatus(status, 'Enter a role name.', false); return; }
+    const res = await fetch('/admin/rbac/roles', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name, label: label || null, description }),
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setStatus(status, `✓ Added — ${d.fanned_out.resource_rows} resource + ${d.fanned_out.attr_rows} attribute rows`, true);
+      ['newRoleName','newRoleLabel','newRoleDesc'].forEach(id => document.getElementById(id).value = '');
+      await refreshAll();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setStatus(status, '✗ ' + (typeof d.detail === 'string' ? d.detail : (d.detail && d.detail[0] && d.detail[0].msg) || res.status), false);
+    }
+  }
+
+  async function refreshAll() {
+    await loadRoles();
+    await Promise.all([loadResPermissions(), loadAttrPermissions()]);
   }
 
   // ── Resource-level permissions ─────────────────────────────────────────
@@ -193,71 +260,54 @@
   async function initResourceTypes() {
     const res = await fetch('/admin/rbac/resource-permissions');
     const all = await res.json();
-    resourceTypes = [...new Set(all.map(p => p.resource_type))].filter(rt => rt !== '*').sort();
-
+    resourceTypes = [...new Set(all.map(p => p.resource_type))].sort();
     const seg = document.getElementById('resourceSeg');
     seg.innerHTML = '';
     resourceTypes.forEach((rt, i) => {
       const b = document.createElement('button');
       b.className = 'seg-btn' + (i === 0 ? ' active' : '');
       b.textContent = labelFor(rt);
-      b.onclick = () => selectResource(rt, b);
+      b.onclick = () => { currentResource = rt; seg.querySelectorAll('.seg-btn').forEach(t => t.classList.remove('active')); b.classList.add('active'); loadResPermissions(); };
       seg.appendChild(b);
     });
-
     currentResource = resourceTypes[0] || null;
     renderResPermissions(all.filter(p => p.resource_type === currentResource));
   }
 
   async function loadResPermissions() {
-    const res = await fetch(`/admin/rbac/resource-permissions?resource_type=${currentResource}`);
+    if (!currentResource) return;
+    const res = await fetch(`/admin/rbac/resource-permissions?resource_type=${encodeURIComponent(currentResource)}`);
     renderResPermissions(await res.json());
   }
 
   function renderResPermissions(rows) {
     resPermissions = rows;
     const container = document.getElementById('resPermContainer');
-    if (!rows || rows.length === 0) {
-      container.innerHTML = '<div class="empty-state">No permission rows — restart the API to seed defaults.</div>';
-      return;
-    }
-
+    if (!rows || !rows.length) { container.innerHTML = '<div class="empty-state">No permission rows — restart the API to seed defaults.</div>'; return; }
     let html = '<table><thead><tr><th>Role</th>';
-    OPS.forEach(op => { html += `<th class="center">${op.charAt(0).toUpperCase()+op.slice(1)}</th>`; });
+    OPS.forEach(op => { html += `<th class="center">${labelFor(op)}</th>`; });
     html += '</tr></thead><tbody>';
-
     roles.forEach(role => {
       const perm = rows.find(p => p.role_name === role.name);
       if (!perm) return;
-      html += `<tr><td class="role-name-cell">${ROLE_LABELS[role.name] || role.name}</td>`;
+      html += `<tr class="${role.active ? '' : 'inactive'}"><td class="role-name-cell">${esc(role.label || role.name)}${role.active ? '' : ' <span class="badge inactive">inactive</span>'}</td>`;
       OPS.forEach(op => {
         const col = `can_${op}`;
-        const checked = perm[col] ? 'checked' : '';
-        html += `<td class="center">
-          <div class="cb-wrap">
-            <input type="checkbox" class="res-cb" ${checked}
-              data-id="${perm.id}" data-col="${col}" onchange="onResCbChange(this)">
-            <span class="cb-status" id="rcs-${perm.id}-${op}"></span>
-          </div>
-        </td>`;
+        html += `<td class="center"><div class="cb-wrap">
+            <input type="checkbox" class="res-cb" ${perm[col] ? 'checked' : ''} data-id="${perm.id}" data-col="${col}" onchange="onResCbChange(this)">
+            <span class="cb-status" id="rcs-${perm.id}-${op}"></span></div></td>`;
       });
       html += '</tr>';
     });
-
-    html += '</tbody></table>';
-    container.innerHTML = html;
+    container.innerHTML = html + '</tbody></table>';
   }
 
   async function onResCbChange(cb) {
-    const id = cb.dataset.id;
-    const col = cb.dataset.col;
-    const value = cb.checked;
+    const id = cb.dataset.id, col = cb.dataset.col, value = cb.checked;
     const statusEl = document.getElementById(`rcs-${id}-${col.replace('can_','')}`);
     try {
       const res = await fetch(`/admin/rbac/resource-permissions/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [col]: value }),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [col]: value }),
       });
       if (res.ok) {
         const updated = await res.json();
@@ -265,91 +315,79 @@
         if (idx >= 0) resPermissions[idx] = updated;
         statusEl.textContent = '✓'; statusEl.className = 'cb-status ok';
         setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'cb-status'; }, 1500);
-      } else {
-        cb.checked = !value;
-        statusEl.textContent = '✗'; statusEl.className = 'cb-status err';
-      }
-    } catch {
-      cb.checked = !value;
-      statusEl.textContent = '✗'; statusEl.className = 'cb-status err';
-    }
+      } else { cb.checked = !value; statusEl.textContent = '✗'; statusEl.className = 'cb-status err'; }
+    } catch { cb.checked = !value; statusEl.textContent = '✗'; statusEl.className = 'cb-status err'; }
   }
 
-  function selectResource(rt, btn) {
-    currentResource = rt;
-    document.querySelectorAll('#resourceSeg .seg-btn').forEach(t => t.classList.remove('active'));
-    btn.classList.add('active');
-    loadResPermissions();
-  }
+  // ── Attribute-level permissions (per entity type) ──────────────────────
 
-  // ── Attribute-level permissions (flat) ────────────────────────────────
+  async function initEntityTypes() {
+    const res = await fetch('/admin/rbac/entity-types');
+    entityTypes = await res.json();
+    const seg = document.getElementById('entitySeg');
+    seg.innerHTML = '';
+    entityTypes.forEach((et, i) => {
+      const b = document.createElement('button');
+      b.className = 'seg-btn' + (i === 0 ? ' active' : '');
+      b.textContent = labelFor(et);
+      b.onclick = () => { currentEntity = et; seg.querySelectorAll('.seg-btn').forEach(t => t.classList.remove('active')); b.classList.add('active'); loadAttrPermissions(); };
+      seg.appendChild(b);
+    });
+    currentEntity = entityTypes[0] || null;
+    await loadAttrPermissions();
+  }
 
   async function loadAttrPermissions() {
-    document.getElementById('attrContainer').innerHTML = '<div class="empty-state">Loading…</div>';
-    const res = await fetch('/admin/rbac/permissions');
-    attrPermissions = await res.json();
+    const container = document.getElementById('attrContainer');
+    document.getElementById('addAttrEntity').textContent = currentEntity ? labelFor(currentEntity) : '…';
+    if (!currentEntity) { container.innerHTML = '<div class="empty-state">This service has no attrs-bearing entity types.</div>'; return; }
+    container.innerHTML = '<div class="empty-state">Loading…</div>';
+    const q = `entity_type=${encodeURIComponent(currentEntity)}`;
+    const [aRes, pRes] = await Promise.all([fetch(`/admin/rbac/attributes?${q}`), fetch(`/admin/rbac/permissions?${q}`)]);
+    attributes = await aRes.json();
+    attrPermissions = await pRes.json();
     renderAttrPermissions();
   }
 
   function renderAttrPermissions() {
     const container = document.getElementById('attrContainer');
-    const attrKeys = [...new Set(attrPermissions.map(p => p.attr_key))].sort();
-
     const badge = document.getElementById('attrCount');
-    badge.textContent = `${attrKeys.length} attr${attrKeys.length !== 1 ? 's' : ''}`;
-    badge.style.display = attrKeys.length > 0 ? '' : 'none';
-
-    if (attrKeys.length === 0) {
-      container.innerHTML = `<div class="empty-state">No attributes registered yet.<br><br>Click <strong>Sync Attrs</strong> to discover them from the database.</div>`;
+    badge.textContent = `${attributes.length} attr${attributes.length !== 1 ? 's' : ''}`;
+    badge.style.display = attributes.length ? '' : 'none';
+    if (!attributes.length) {
+      container.innerHTML = `<div class="empty-state">No attributes registered for <strong>${esc(labelFor(currentEntity))}</strong>.<br><br>Click <strong>Sync Attrs</strong> to discover them from stored data, or add one below.</div>`;
       return;
     }
-
-    let html = '<table><thead><tr><th>Attribute Key</th>';
-    roles.forEach(r => { html += `<th>${ROLE_LABELS[r.name] || r.name}</th>`; });
-    html += '</tr></thead><tbody>';
-
-    attrKeys.forEach(key => {
-      html += `<tr data-key="${key}"><td class="attr-key">${key}</td>`;
+    let html = '<table><thead><tr><th>Attribute</th><th>Origin</th>';
+    roles.forEach(r => { html += `<th class="${r.active ? '' : 'inactive'}">${esc(r.label || r.name)}</th>`; });
+    html += '<th></th></tr></thead><tbody>';
+    attributes.forEach(a => {
+      html += `<tr data-key="${esc(a.attr_key)}"><td class="attr-key" title="${esc(a.description)}">${esc(a.attr_key)}</td>
+        <td><span class="badge ${a.origin}">${a.origin}</span></td>`;
       roles.forEach(role => {
-        const perm = attrPermissions.find(p => p.attr_key === key && p.role_name === role.name);
-        const val = permValue(perm);
-        const id = perm ? perm.id : null;
+        const perm = attrPermissions.find(p => p.attr_key === a.attr_key && p.role_name === role.name);
+        const val = permValue(perm), id = perm ? perm.id : '';
         html += `<td class="perm-cell">
-          <select class="perm-select ${selectClass(val)}" data-id="${id}" data-key="${key}" data-role="${role.name}" onchange="onAttrSelectChange(this)">
+          <select class="perm-select ${selectClass(val)}" data-id="${id}" ${id ? '' : 'disabled title="No permission row — run Sync Attrs"'} onchange="onAttrSelectChange(this)">
             <option value="none" ${val==='none'?'selected':''}>No Access</option>
             <option value="read" ${val==='read'?'selected':''}>Read Only</option>
             <option value="rw"   ${val==='rw'  ?'selected':''}>Read + Write</option>
-          </select>
-          <span class="cell-status" id="cs-${id||(key+'_'+role.name)}"></span>
-        </td>`;
+          </select><span class="cell-status" id="cs-${id || (a.attr_key+'_'+role.name)}"></span></td>`;
       });
-      html += '</tr>';
+      html += `<td>${a.origin === 'manual' ? `<button class="btn btn-danger" onclick="removeAttribute('${a.id}')" title="Remove this manual attribute (and its rules)">×</button>` : ''}</td></tr>`;
     });
-
-    html += '</tbody></table>';
-    container.innerHTML = html;
+    container.innerHTML = html + '</tbody></table>';
     filterAttrTable();
   }
 
   async function onAttrSelectChange(sel) {
-    const val = sel.value;
-    const id = sel.dataset.id;
-    const key = sel.dataset.key;
-    const role = sel.dataset.role;
-    const statusEl = document.getElementById(`cs-${id !== 'null' && id ? id : (key+'_'+role)}`);
+    const val = sel.value, id = sel.dataset.id;
+    const statusEl = document.getElementById(`cs-${id}`);
     sel.className = `perm-select ${selectClass(val)}`;
-
-    if (!id || id === 'null') {
-      statusEl.textContent = '!'; statusEl.className = 'cell-status err';
-      statusEl.title = 'No permission row — run Sync Attrs first';
-      return;
-    }
-
     const can_read = val !== 'none', can_write = val === 'rw';
     try {
       const res = await fetch(`/admin/rbac/permissions/${id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ can_read, can_write }),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ can_read, can_write }),
       });
       if (res.ok) {
         const updated = await res.json();
@@ -357,29 +395,50 @@
         if (idx >= 0) attrPermissions[idx] = updated;
         statusEl.textContent = '✓'; statusEl.className = 'cell-status ok';
         setTimeout(() => { statusEl.textContent = ''; statusEl.className = 'cell-status'; }, 2000);
-      } else {
-        statusEl.textContent = '✗'; statusEl.className = 'cell-status err';
-      }
+      } else { statusEl.textContent = '✗'; statusEl.className = 'cell-status err'; }
     } catch { statusEl.textContent = '✗'; statusEl.className = 'cell-status err'; }
+  }
+
+  async function addAttribute() {
+    const key = document.getElementById('newAttrKey').value.trim();
+    const description = document.getElementById('newAttrDesc').value.trim();
+    const status = document.getElementById('addAttrStatus');
+    if (!currentEntity) { setStatus(status, 'No entity type selected.', false); return; }
+    if (!key) { setStatus(status, 'Enter an attribute key.', false); return; }
+    const res = await fetch('/admin/rbac/attributes', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ entity_type: currentEntity, attr_key: key, description }),
+    });
+    if (res.ok) {
+      setStatus(status, '✓ Registered', true);
+      document.getElementById('newAttrKey').value = ''; document.getElementById('newAttrDesc').value = '';
+      await loadAttrPermissions();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      setStatus(status, '✗ ' + (typeof d.detail === 'string' ? d.detail : (d.detail && d.detail[0] && d.detail[0].msg) || res.status), false);
+    }
+  }
+
+  async function removeAttribute(id) {
+    if (!confirm('Remove this attribute and its permission rules?')) return;
+    const res = await fetch(`/admin/rbac/attributes/${id}`, { method: 'DELETE' });
+    if (res.ok || res.status === 204) await loadAttrPermissions();
+    else { const d = await res.json().catch(() => ({})); alert(d.detail || 'Could not remove'); }
   }
 
   async function syncAttrs() {
     const bar = document.getElementById('statusBar');
-    bar.className = 'status-bar'; bar.textContent = 'Syncing attributes from database…';
+    bar.className = 'status-bar'; bar.textContent = 'Syncing attributes from stored data…';
     try {
       const res = await fetch('/admin/rbac/sync-attrs', { method: 'POST' });
       const data = await res.json();
       bar.className = 'status-bar ok';
-      bar.textContent = `✓ Sync complete — ${data.discovered} attribute keys found, ${data.inserted} new permission rows created.`;
+      bar.textContent = `✓ Sync complete — ${data.discovered} keys found, ${data.registered} newly registered, ${data.inserted} permission rows created.`;
       await loadAttrPermissions();
-    } catch {
-      bar.className = 'status-bar err'; bar.textContent = '✗ Sync failed.';
-    }
+    } catch { bar.className = 'status-bar err'; bar.textContent = '✗ Sync failed.'; }
   }
 
   // ── Organisation role assignments ─────────────────────────────────────
-  // Keyed on the organisation's internal id — a GLN is optional (attrs.gln) and
-  // so cannot identify an organisation. GLN is shown as a hint only.
 
   async function loadOrganisationRoles() {
     const res = await fetch('/admin/rbac/organisation-roles');
@@ -392,54 +451,33 @@
     const badge = document.getElementById('opRoleCount');
     const byOrg = {};
     organisationRoles.forEach(a => {
-      if (!byOrg[a.organisation_id]) {
-        byOrg[a.organisation_id] = {
-          name: a.organisation_name,
-          gln: a.organisation_gln,
-          roles: [],
-        };
-      }
+      if (!byOrg[a.organisation_id]) byOrg[a.organisation_id] = { name: a.organisation_name, gln: a.organisation_gln, roles: [] };
       byOrg[a.organisation_id].roles.push({ id: a.id, role_name: a.role_name });
     });
     const ids = Object.keys(byOrg);
     badge.textContent = `${ids.length} organisation${ids.length!==1?'s':''}`;
-    badge.style.display = ids.length > 0 ? '' : 'none';
-    if (ids.length === 0) {
-      container.innerHTML = '<div class="empty-state">No role assignments yet. Use the form below to assign roles to organisations.</div>';
-      return;
-    }
+    badge.style.display = ids.length ? '' : 'none';
+    if (!ids.length) { container.innerHTML = '<div class="empty-state">No role assignments yet. Use the form below to assign roles to organisations.</div>'; return; }
     let html = '<table><thead><tr><th>Organisation</th><th>GLN</th><th>Assigned Roles</th></tr></thead><tbody>';
     ids.sort((a, b) => (byOrg[a].name||'').localeCompare(byOrg[b].name||'')).forEach(id => {
       const { name, gln, roles: assigned } = byOrg[id];
-      const tags = assigned.map(a =>
-        `<span class="role-tag">${ROLE_LABELS[a.role_name]||a.role_name}
-          <button onclick="removeOrganisationRole('${a.id}')" title="Remove">×</button>
-        </span>`
-      ).join('');
-      html += `<tr><td class="op-name">${name||'—'}</td><td class="op-gln">${gln||'—'}</td><td>${tags}</td></tr>`;
+      const tags = assigned.map(a => `<span class="role-tag">${esc(roleLabel(a.role_name))}<button onclick="removeOrganisationRole('${a.id}')" title="Remove">×</button></span>`).join('');
+      html += `<tr><td class="op-name">${esc(name||'—')}</td><td class="op-gln">${esc(gln||'—')}</td><td>${tags}</td></tr>`;
     });
-    html += '</tbody></table>';
-    container.innerHTML = html;
+    container.innerHTML = html + '</tbody></table>';
   }
 
   async function addOrganisationRole() {
     const orgId = document.getElementById('addOrgId').value;
     const role = document.getElementById('addRoleName').value;
     const status = document.getElementById('addRoleStatus');
-    if (!orgId || !role) { status.textContent = 'Select both an organisation and a role.'; status.style.color='#dc3545'; return; }
+    if (!orgId || !role) { setStatus(status, 'Select both an organisation and a role.', false); return; }
     const res = await fetch('/admin/rbac/organisation-roles', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ organisation_id: orgId, role_name: role }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ organisation_id: orgId, role_name: role }),
     });
-    if (res.ok) {
-      status.textContent = '✓ Assigned'; status.style.color = '#198754';
-      setTimeout(() => { status.textContent = ''; }, 2000);
-      await loadOrganisationRoles();
-    } else if (res.status === 409) {
-      status.textContent = 'Already assigned.'; status.style.color = '#dc3545';
-    } else {
-      status.textContent = '✗ Error'; status.style.color = '#dc3545';
-    }
+    if (res.ok) { setStatus(status, '✓ Assigned', true); await loadOrganisationRoles(); }
+    else if (res.status === 409) setStatus(status, 'Already assigned.', false);
+    else setStatus(status, '✗ Error', false);
   }
 
   async function removeOrganisationRole(id) {

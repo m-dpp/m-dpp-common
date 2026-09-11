@@ -1,5 +1,8 @@
 """A parametrised ``/organisations`` CRUD router.
 
+The attribute filter is keyed per entity type; this router uses ``resource_name``
+(default ``"organisations"``) as its ``entity_type``.
+
 ``dpp-app`` and ``mdpp-app`` mount the *same* endpoints against their *own*
 ``organisations`` table and ``@context`` document, so those are constructor
 arguments. The RBAC checks route through the service's :class:`RbacEngine`
@@ -65,7 +68,7 @@ def make_organisation_router(
         data = body.model_dump()
         if data.get("attrs"):
             data["attrs"] = await rbac_engine.filter_writable_attrs(
-                data["attrs"], principal["role"], db
+                data["attrs"], principal["role"], db, entity_type=_RESOURCE
             )
         obj = Organisation(**data)
         db.add(obj)
@@ -77,7 +80,9 @@ def make_organisation_router(
                 status_code=409, detail="An organisation with this GLN already exists"
             )
         await db.refresh(obj)
-        readable_attrs = await rbac_engine.filter_readable_attrs(obj.attrs, principal["role"], db)
+        readable_attrs = await rbac_engine.filter_readable_attrs(
+            obj.attrs, principal["role"], db, entity_type=_RESOURCE
+        )
         return _to_jsonld(obj, readable_attrs)
 
     @router.get("")
@@ -91,7 +96,7 @@ def make_organisation_router(
         out = []
         for org in orgs:
             readable_attrs = await rbac_engine.filter_readable_attrs(
-                org.attrs, principal["role"], db
+                org.attrs, principal["role"], db, entity_type=_RESOURCE
             )
             out.append(_to_jsonld(org, readable_attrs))
         return out
@@ -110,7 +115,9 @@ def make_organisation_router(
         obj = result.scalar_one_or_none()
         if obj is None:
             raise HTTPException(status_code=404, detail="Organisation not found")
-        readable_attrs = await rbac_engine.filter_readable_attrs(obj.attrs, principal["role"], db)
+        readable_attrs = await rbac_engine.filter_readable_attrs(
+            obj.attrs, principal["role"], db, entity_type=_RESOURCE
+        )
         return _to_jsonld(obj, readable_attrs)
 
     @router.get("/{organisation_id}")
@@ -124,7 +131,9 @@ def make_organisation_router(
         obj = result.scalar_one_or_none()
         if obj is None:
             raise HTTPException(status_code=404, detail="Organisation not found")
-        readable_attrs = await rbac_engine.filter_readable_attrs(obj.attrs, principal["role"], db)
+        readable_attrs = await rbac_engine.filter_readable_attrs(
+            obj.attrs, principal["role"], db, entity_type=_RESOURCE
+        )
         return _to_jsonld(obj, readable_attrs)
 
     @router.patch("/{organisation_id}")
@@ -146,7 +155,9 @@ def make_organisation_router(
         for field in body.model_fields_set:
             value = getattr(body, field)
             if field == "attrs" and value is not None:
-                value = await rbac_engine.filter_writable_attrs(value, principal["role"], db)
+                value = await rbac_engine.filter_writable_attrs(
+                    value, principal["role"], db, entity_type=_RESOURCE
+                )
             setattr(obj, field, value)
         try:
             await db.commit()
