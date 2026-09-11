@@ -31,7 +31,11 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column
+
+# NOTE: every ``__table_args__`` below is a ``declared_attr`` so each service's
+# subclass gets *fresh* Constraint objects — a constraint instance can only belong
+# to one Table, and several services (and the test suite) bind these mixins.
 
 ATTR_ORIGIN_DISCOVERED = "discovered"
 ATTR_ORIGIN_MANUAL = "manual"
@@ -60,9 +64,10 @@ class RbacAttributeMixin:
     """
 
     __tablename__ = "rbac_attributes"
-    __table_args__ = (
-        UniqueConstraint("entity_type", "attr_key", name="uq_rbac_attribute"),
-    )
+
+    @declared_attr.directive
+    def __table_args__(cls):
+        return (UniqueConstraint("entity_type", "attr_key", name="uq_rbac_attribute"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     entity_type: Mapped[str] = mapped_column(String, nullable=False)
@@ -81,15 +86,18 @@ class AttrPermissionMixin:
     """
 
     __tablename__ = "attr_permissions"
-    __table_args__ = (
-        UniqueConstraint("entity_type", "attr_key", "role_name", name="uq_attr_permission"),
-        ForeignKeyConstraint(
-            ["entity_type", "attr_key"],
-            ["rbac_attributes.entity_type", "rbac_attributes.attr_key"],
-            ondelete="CASCADE",
-            name="fk_attr_permissions_attribute",
-        ),
-    )
+
+    @declared_attr.directive
+    def __table_args__(cls):
+        return (
+            UniqueConstraint("entity_type", "attr_key", "role_name", name="uq_attr_permission"),
+            ForeignKeyConstraint(
+                ["entity_type", "attr_key"],
+                ["rbac_attributes.entity_type", "rbac_attributes.attr_key"],
+                ondelete="CASCADE",
+                name="fk_attr_permissions_attribute",
+            ),
+        )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     entity_type: Mapped[str] = mapped_column(String, nullable=False)
@@ -110,9 +118,10 @@ class OrganisationRoleMixin:
     """
 
     __tablename__ = "organisation_roles"
-    __table_args__ = (
-        UniqueConstraint("organisation_id", "role_name", name="uq_organisation_role"),
-    )
+
+    @declared_attr.directive
+    def __table_args__(cls):
+        return (UniqueConstraint("organisation_id", "role_name", name="uq_organisation_role"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organisation_id: Mapped[uuid.UUID] = mapped_column(
@@ -127,9 +136,10 @@ class OrganisationRoleMixin:
 
 class ResourcePermissionMixin:
     __tablename__ = "resource_permissions"
-    __table_args__ = (
-        UniqueConstraint("resource_type", "role_name", name="uq_resource_permission"),
-    )
+
+    @declared_attr.directive
+    def __table_args__(cls):
+        return (UniqueConstraint("resource_type", "role_name", name="uq_resource_permission"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     resource_type: Mapped[str] = mapped_column(String, nullable=False)
