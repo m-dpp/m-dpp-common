@@ -3,6 +3,11 @@
 The attribute filter is keyed per entity type; this router uses ``resource_name``
 (default ``"organisations"``) as its ``entity_type``.
 
+Writes are *rejected*, never silently trimmed: a body naming an attribute the
+role may not write is a 403. ``PATCH`` merges ``attrs`` onto the stored bag
+(``null`` removes a key), so keys the caller does not name — including ones they
+could not write — are left exactly as stored.
+
 ``dpp-app`` and ``mdpp-app`` mount the *same* endpoints against their *own*
 ``organisations`` table and ``@context`` document, so those are constructor
 arguments. The RBAC checks route through the service's :class:`RbacEngine`
@@ -23,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from m_dpp_common.auth import get_principal as _default_get_principal
 from m_dpp_common.organisation.schemas import OrganisationCreate, OrganisationUpdate
+from m_dpp_common.orm import apply_attrs_patch
 
 
 def make_organisation_router(
@@ -66,10 +72,9 @@ def make_organisation_router(
     ):
         await rbac_engine.check_resource_permission(principal, "create", _RESOURCE, db)
         data = body.model_dump()
-        if data.get("attrs"):
-            data["attrs"] = await rbac_engine.filter_writable_attrs(
-                data["attrs"], principal["role"], db, entity_type=_RESOURCE
-            )
+        await rbac_engine.assert_writable_attrs(
+            data.get("attrs"), principal["role"], db, entity_type=_RESOURCE
+        )
         obj = Organisation(**data)
         db.add(obj)
         try:
@@ -154,10 +159,13 @@ def make_organisation_router(
             )
         for field in body.model_fields_set:
             value = getattr(body, field)
-            if field == "attrs" and value is not None:
-                value = await rbac_engine.filter_writable_attrs(
+            if field == "attrs":
+                # Merge, never replace: only the keys named here are touched, and
+                # each of them (set or removed) needs write permission.
+                await rbac_engine.assert_writable_attrs(
                     value, principal["role"], db, entity_type=_RESOURCE
                 )
+                value = apply_attrs_patch(obj.attrs, value)
             setattr(obj, field, value)
         try:
             await db.commit()
@@ -167,7 +175,10 @@ def make_organisation_router(
                 status_code=409, detail="An organisation with this GLN already exists"
             )
         await db.refresh(obj)
-        return _to_jsonld(obj)
+        readable_attrs = await rbac_engine.filter_readable_attrs(
+            obj.attrs, principal["role"], db, entity_type=_RESOURCE
+        )
+        return _to_jsonld(obj, readable_attrs)
 
     @router.delete("/{organisation_id}")
     async def remove_organisation(

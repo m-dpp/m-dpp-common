@@ -49,7 +49,11 @@ opaque data.
    (list/read/create/update/delete).
 2. **Attribute-level filter:** keyed on **`(entity_type, attribute)`** — `entity_type` is coarse
    (`product`, `organisation`), **NOT** a granularity level. Unreadable keys are stripped from
-   responses; unwritable keys from write payloads.
+   responses. A write payload naming an unwritable key is **rejected with 403** (the keys are
+   named in the detail) — never silently trimmed, which would return 2xx for a write that did not
+   happen. PATCH `attrs` is a **merge** onto the stored bag (`null` removes a key; keys not named
+   are untouched). Replacing the bag would let any role with resource-level update rights erase
+   attributes it holds no write permission on.
 
 Rules:
 - **Resolve inheritance FIRST, then apply the attribute filter** to the resolved result — so a rule

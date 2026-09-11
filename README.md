@@ -15,10 +15,12 @@ Only cross-cutting *plumbing* that must not diverge between services:
   - **Attribute rules are keyed `(entity_type, attr_key, role_name)`** — `entity_type` is a coarse, service-chosen string (`"products"`, `"organisations"`, `"fibre_nodes"`), never a granularity level. **Resolve inheritance first, then filter.** No wildcards.
   - **Attribute registry** (`rbac_attributes`): attributes are *discovered* from stored `attrs` by `POST /sync-attrs` or *registered manually* via `POST /admin/rbac/attributes` (for computed fields such as a product's `level`). Sync never deletes; only manual entries can be removed.
   - Creating a role or registering an attribute **fans out** the missing permission rows (safe defaults: see/read, no writes) so the grid is always complete.
-  - `engine.for_entity("products")` returns the three call points with the entity type bound — a service exports those from its `app/core/rbac.py`.
+  - **Writes are rejected, not trimmed.** `assert_writable_attrs` is 403 (naming the keys) when a payload touches an attribute the role may not write. `PATCH` bodies must *merge* `attrs` onto the stored bag with `m_dpp_common.orm.apply_attrs_patch` (`null` removes a key) and run the check on the patch keys — replacing the bag lets any updater wipe protected keys. `filter_writable_attrs` (silent drop) is legacy.
+  - `engine.for_entity("products")` returns the call points with the entity type bound — a service exports those from its `app/core/rbac.py`.
   - `m_dpp_common.rbac.migration.reset_rbac_tables(conn, Base)` — for a service's Alembic revision: drop + recreate the RBAC tables in the v0.7 shape (role/permission data is seed data and comes back on boot + Sync Attrs).
 - `m_dpp_common.organisation` — the **Organisation entity** (any party in the supply chain): a `Base`-agnostic `OrganisationMixin`, the `OrganisationCreate` / `OrganisationUpdate` schemas, and a parametrised `/organisations` CRUD router. Each service binds the table to its own `Base` and mounts the router against its own database and `@context`.
   - An organisation's **nature comes solely from its assigned roles** (`organisation_roles`) — there is no type column or `operator_type` attribute.
+  - `PATCH /organisations/{id}` merges `attrs` (send a key as `null` to remove it; `"attrs": null` is a 422). A key the role may not write is a 403.
   - A **GLN is optional and lives in `attrs["gln"]`** (a laboratory is often not a GS1 member), normalised through `m_dpp_common.gs1.validate_gln` on write and kept unique by a partial index. Look one up with `GET /organisations/by-gln/{gln}`.
   - RBAC role assignments key on the organisation's **surrogate `id`**, never the GLN.
 

@@ -3,8 +3,13 @@
 - **Resource-level gate** — per (role, resource_type, operation). `check_resource_permission`.
   It is also where the role itself is validated: an unknown or inactive role is 403.
 - **Attribute-level filter** — per (role, entity_type, attr_key).
-  `filter_readable_attrs` / `filter_writable_attrs`. **Resolve inheritance first, then
-  filter the resolved result** — a rule follows an attribute through inheritance.
+  `filter_readable_attrs` strips unreadable keys from a response. On the write side
+  `assert_writable_attrs` *rejects* (403) a payload naming a key the role may not write —
+  removing a key is a write too, so a PATCH must merge onto the stored bag and run this
+  check on the keys it names (see `m_dpp_common.orm.apply_attrs_patch`). The older
+  `filter_writable_attrs` silently drops denied keys and is kept only for callers that
+  knowingly want that. **Resolve inheritance first, then filter the resolved result** —
+  a rule follows an attribute through inheritance.
 
 The engine is entity-agnostic: `entity_type` and `resource_type` are opaque strings
 the service chooses (e.g. `"products"`), and roles are whatever rows the service's
@@ -95,7 +100,11 @@ class RbacEngine:
     async def filter_writable_attrs(
         self, attrs: dict | None, role_name: str, db: AsyncSession, *, entity_type: str
     ) -> dict | None:
-        """Strip keys the role may not write on `entity_type` before persisting."""
+        """Strip keys the role may not write on `entity_type` before persisting.
+
+        Prefer :meth:`assert_writable_attrs` in request handlers: silently dropping a
+        key returns 2xx for a write that did not happen, and a caller cannot tell.
+        """
         if not attrs:
             return attrs
         denied = await self._denied_keys(
@@ -103,10 +112,34 @@ class RbacEngine:
         )
         return {k: v for k, v in attrs.items() if k not in denied}
 
+    async def assert_writable_attrs(
+        self, attrs: dict | None, role_name: str, db: AsyncSession, *, entity_type: str
+    ) -> None:
+        """403 if `attrs` names any key the role may not write on `entity_type`.
+
+        Pass the keys the request *touches* — setting a value and removing one (a
+        `null` in a PATCH) are both writes. Keys the request does not name are not
+        checked, so a PATCH that merges onto the stored bag leaves protected keys
+        intact rather than wiping them.
+        """
+        if not attrs:
+            return
+        denied = await self._denied_keys(
+            attrs, role_name, db, entity_type=entity_type, column="can_write"
+        )
+        if denied:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    f"Role '{role_name}' is not permitted to write "
+                    f"{', '.join(sorted(denied))} on {entity_type}"
+                ),
+            )
+
     # ------------------------------------------------------------- binding
 
     def for_entity(self, entity_type: str) -> "BoundRbac":
-        """The three call points with `entity_type` bound — what a service exports::
+        """The call points with `entity_type` bound — what a service exports::
 
             _bound = engine.for_entity("products")
             filter_readable_attrs = _bound.filter_readable_attrs   # (attrs, role, db)
@@ -138,5 +171,12 @@ class BoundRbac:
         self, attrs: dict | None, role_name: str, db: AsyncSession
     ) -> dict | None:
         return await self.engine.filter_writable_attrs(
+            attrs, role_name, db, entity_type=self.entity_type
+        )
+
+    async def assert_writable_attrs(
+        self, attrs: dict | None, role_name: str, db: AsyncSession
+    ) -> None:
+        await self.engine.assert_writable_attrs(
             attrs, role_name, db, entity_type=self.entity_type
         )

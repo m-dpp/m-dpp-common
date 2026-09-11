@@ -1,5 +1,9 @@
 """Request schemas for the Organisation router.
 
+`OrganisationUpdate.attrs` is a *patch*: keys named are set, a key sent as `null`
+is removed, keys not named are left as stored. It must be an object — `"attrs":
+null` is a 422, not "wipe everything" (see the router's PATCH handler).
+
 There is no `gln` field: a GLN is optional and travels inside `attrs`. When one
 *is* supplied we still normalise it through :func:`m_dpp_common.gs1.validate_gln`
 — which accepts a 7–12 digit GS1 Company Prefix and derives the full 13-digit
@@ -9,7 +13,7 @@ and surfaces as a 422 rather than being stored as-is.
 
 from typing import Any
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from m_dpp_common.gs1 import validate_gln
 
@@ -44,4 +48,5 @@ class OrganisationCreate(_GlnNormalising):
 
 class OrganisationUpdate(_GlnNormalising):
     name: str | None = None
-    attrs: dict[str, Any] | None = None
+    # Not Optional: an explicit null must fail validation rather than mean "clear".
+    attrs: dict[str, Any] = Field(default_factory=dict)

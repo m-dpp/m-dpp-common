@@ -102,6 +102,29 @@ async def test_filter_writable_drops_denied_keys():
     assert out == {"b": 2}
 
 
+async def test_assert_writable_is_403_naming_the_denied_keys():
+    with pytest.raises(Exception) as exc:
+        await _engine().assert_writable_attrs(
+            {"a": 1, "b": 2, "c": None}, "public", _db(denied_keys=["a", "c"]), entity_type="products"
+        )
+    assert exc.value.status_code == 403
+    assert "a, c" in exc.value.detail
+    assert "products" in exc.value.detail
+
+
+async def test_assert_writable_passes_when_nothing_denied():
+    await _engine().assert_writable_attrs(
+        {"a": 1}, "public", _db(denied_keys=[]), entity_type="products"
+    )
+
+
+async def test_assert_writable_skips_query_on_empty_patch():
+    db = AsyncMock()
+    await _engine().assert_writable_attrs({}, "public", db, entity_type="products")
+    await _engine().assert_writable_attrs(None, "public", db, entity_type="products")
+    db.execute.assert_not_called()
+
+
 async def test_no_wildcard_semantics():
     """A '*' row is just a key literally named '*' — it does not deny everything."""
     out = await _engine().filter_readable_attrs(
@@ -137,3 +160,11 @@ async def test_for_entity_binds_entity_type():
     assert "entity_type = 'fibre_nodes'" in sql
     # the resource gate passes straight through
     await bound.check_resource_permission({"role": "public"}, "read", "fibre_nodes", _db())
+
+
+async def test_for_entity_binds_assert_writable():
+    bound = _engine().for_entity("fibre_nodes")
+    with pytest.raises(Exception) as exc:
+        await bound.assert_writable_attrs({"locked": 1}, "public", _db(denied_keys=["locked"]))
+    assert exc.value.status_code == 403
+    assert "fibre_nodes" in exc.value.detail

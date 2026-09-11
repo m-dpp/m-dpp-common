@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "m-dpp-common"
-version = "0.7.0"
+version = "0.8.0"
 description = "Shared infrastructure for the mDPP services: GS1 identifiers, DB plumbing, ORM mixins, auth stub, RBAC engine, Organisation entity. Infrastructure only — no domain logic."
 requires-python = ">=3.11"
 dependencies = [

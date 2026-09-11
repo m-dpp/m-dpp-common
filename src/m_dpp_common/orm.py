@@ -36,3 +36,21 @@ class AttrsMixin:
 
 class EntityMixin(UUIDPkMixin, TimestampMixin, SoftDeleteMixin, AttrsMixin):
     """UUID PK + created/updated timestamps + soft-delete marker + an ``attrs`` bag."""
+
+
+def apply_attrs_patch(stored: dict | None, patch: dict) -> dict:
+    """Merge a PATCH body's ``attrs`` onto the stored bag.
+
+    Keys in ``patch`` are set; a key whose value is ``None`` is removed; keys not
+    named in ``patch`` are left untouched. A PATCH must never *replace* the bag —
+    that would let any caller with resource-level update rights erase attributes
+    they hold no write permission on. Run ``assert_writable_attrs`` on ``patch``
+    (not on the merged result) so the check covers exactly the keys being changed.
+    """
+    merged = dict(stored or {})
+    for key, value in patch.items():
+        if value is None:
+            merged.pop(key, None)
+        else:
+            merged[key] = value
+    return merged

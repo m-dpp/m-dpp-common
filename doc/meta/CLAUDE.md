@@ -72,8 +72,9 @@ Roles are **actor identities**; access lives in the permission engine, not in ro
 ## RBAC — two layers
 1. **Resource-level** gate: role x resource-type (e.g. `product`, `organisation`) x operation.
 2. **Attribute-level** filter: **keyed on `(entity_type, attribute)`** — entity_type is coarse
-   (`product`, `organisation`), **NOT** a granularity level. Strips unreadable keys from responses,
-   unwritable keys from writes.
+   (`product`, `organisation`), **NOT** a granularity level. Strips unreadable keys from responses;
+   **rejects (403) writes that name an unwritable key** — never silently drops them. PATCH merges
+   `attrs` onto the stored bag (`null` removes a key), so unnamed keys are never touched.
 - **Resolve inheritance FIRST, then apply the attribute filter** (a rule follows an attribute
   through inheritance; do not filter per-level then merge).
 - **Attributes are admin-addable per entity_type** — including **computed/derived** fields that are
@@ -102,6 +103,10 @@ entity-agnostic.
 - Resolve inheritance first, then filter.
 - operator -> organisation; GLN optional in attrs; type from roles; RBAC keys on internal id.
 - User represents an organisation; org's role is the authority (no per-user roles for MVP).
+- 2026-09-11: write-side attribute RBAC *rejects* (403, naming the keys) instead of silently
+  filtering; PATCH `attrs` merges (null removes a key) and never replaces the bag — replacing let
+  any role with update rights erase keys it could not write. `assert_writable_attrs` +
+  `orm.apply_attrs_patch`; `filter_writable_attrs` kept as legacy only.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions
