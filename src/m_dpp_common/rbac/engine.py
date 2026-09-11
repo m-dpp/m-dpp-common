@@ -79,7 +79,7 @@ class RbacEngine:
                 getattr(Attr, column) == False,  # noqa: E712
             )
         )
-        return {row[0] if isinstance(row, tuple) else row for row in result.all()}
+        return set(result.scalars().all())
 
     async def filter_readable_attrs(
         self, attrs: dict | None, role_name: str, db: AsyncSession, *, entity_type: str

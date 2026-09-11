@@ -28,12 +28,11 @@ INACTIVE = SimpleNamespace(name="public", active=False)
 
 
 def _db(*, role=ACTIVE, rows=(), denied_keys=()):
-    """db.execute() → one result mock serving all three shapes the engine reads:
-    scalar_one_or_none (role), scalars().all() (resource rows), all() (denied keys)."""
+    """db.execute() → one result mock serving the shapes the engine reads:
+    scalar_one_or_none (role) and scalars().all() (resource rows / denied keys)."""
     result = MagicMock()
     result.scalar_one_or_none.return_value = role
-    result.scalars.return_value.all.return_value = list(rows)
-    result.all.return_value = [(k,) for k in denied_keys]
+    result.scalars.return_value.all.return_value = list(rows) or list(denied_keys)
     db = AsyncMock()
     db.execute.return_value = result
     return db
