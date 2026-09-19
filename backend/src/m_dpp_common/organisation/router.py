@@ -94,11 +94,15 @@ def make_organisation_router(
 
     @router.get("")
     async def list_organisations(
+        include_removed: bool = False,
         db: AsyncSession = Depends(get_db),
         principal: dict = Depends(get_principal),
     ):
         await rbac_engine.check_resource_permission(principal, "list", _RESOURCE, db)
-        result = await db.execute(select(Organisation).where(Organisation.removed_at.is_(None)))
+        stmt = select(Organisation).order_by(Organisation.name)
+        if not include_removed:
+            stmt = stmt.where(Organisation.removed_at.is_(None))
+        result = await db.execute(stmt)
         orgs = result.scalars().all()
         out = []
         for org in orgs:
@@ -155,11 +159,16 @@ def make_organisation_router(
         obj = result.scalar_one_or_none()
         if obj is None:
             raise HTTPException(status_code=404, detail="Organisation not found")
-        if obj.removed_at is not None:
+        fields = set(body.model_fields_set)
+        if "active" in fields:
+            # the one edit allowed on a removed organisation: bringing it back
+            obj.removed_at = None if body.active else (obj.removed_at or datetime.now(timezone.utc))
+            fields.discard("active")
+        if obj.removed_at is not None and fields:
             raise HTTPException(
                 status_code=409, detail="Cannot update: Organisation has been removed"
             )
-        for field in body.model_fields_set:
+        for field in fields:
             value = getattr(body, field)
             if field == "attrs":
                 # Merge, never replace: only the keys named here are touched, and

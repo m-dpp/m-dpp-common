@@ -107,8 +107,20 @@ entity-agnostic.
   filtering; PATCH `attrs` merges (null removes a key) and never replaces the bag — replacing let
   any role with update rights erase keys it could not write. `assert_writable_attrs` +
   `orm.apply_attrs_patch`; `filter_writable_attrs` kept as legacy only.
+- 2026-09-19: repo split into `backend/` (Python lib, install with `#subdirectory=backend`) and
+  `frontend/` (`@m-dpp/ui`, React/TS/Vite library consumed as a local `file:` package, source
+  exports — no build step). Neither is an app.
+- 2026-09-19: the Jinja RBAC dashboard is gone; `/admin/rbac` is JSON only. The admin UI (RBAC,
+  organisations, users & links, acting-as) lives in the shared React library.
+- 2026-09-19: auth seam = `SubjectMixin` + `MembershipMixin` (one organisation per subject) +
+  `resolve_principal` (identity → subject → organisation → active roles). Only `dev_identity.py`
+  (`X-Dev-Sub`) is temporary. No identity / unknown / unlinked → the anonymous role
+  (`RBAC_ANONYMOUS_ROLE`, default `public`), never a privileged default.
+- 2026-09-19: a principal carries `roles` (list); the engine applies **union** semantics (allowed
+  if any held role allows; readable/writable if any may). `principal["role"]` kept as compat.
+- 2026-09-19: `/subjects`, `/memberships`, `/me` are dev-admin endpoints, not RBAC-gated.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions
 - Whether any mdpp data is non-public (decides how much read-RBAC mdpp needs).
-- One organisation per user, or several.
+- One organisation per user, or several. (MVP: exactly one — `memberships.subject_id` is unique.)

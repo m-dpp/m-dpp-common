@@ -50,3 +50,5 @@ class OrganisationUpdate(_GlnNormalising):
     name: str | None = None
     # Not Optional: an explicit null must fail validation rather than mean "clear".
     attrs: dict[str, Any] = Field(default_factory=dict)
+    # Soft-delete toggle: `false` sets removed_at, `true` clears it (reactivate).
+    active: bool | None = None
