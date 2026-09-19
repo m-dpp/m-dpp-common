@@ -34,6 +34,17 @@ describe("inferType", () => {
     expect(inferType([])).toBe("list");
     expect(inferType({})).toBe("object");
   });
+
+  it("recognises image links by extension or data URI, never by scheme alone", () => {
+    expect(inferType("https://cdn.example/p/jacket.jpg")).toBe("image");
+    expect(inferType("https://cdn.example/p/jacket.PNG?w=400#x")).toBe("image");
+    expect(inferType("http://cdn.example/a.webp")).toBe("image");
+    expect(inferType("data:image/png;base64,iVBORw0KGgo=")).toBe("image");
+    expect(inferType("https://example.com/product/123")).toBe("text");
+    expect(inferType("https://example.com/report.pdf")).toBe("text");
+    expect(inferType("javascript:alert(1).png")).toBe("text");
+    expect(inferType("photo.jpg")).toBe("text");
+  });
 });
 
 describe("fromJson / toJson", () => {
@@ -69,6 +80,16 @@ describe("coercion", () => {
     expect(coerceValue("nope", "date")).toBe("");
     expect(coerceValue(7, "text")).toBe("7");
     expect(coerceValue(null, "text")).toBe("");
+    expect(coerceValue("https://x/y.jpg", "image")).toBe("https://x/y.jpg");
+    expect(coerceValue("not a url", "image")).toBe("not a url"); // kept — the user is editing it
+    expect(coerceValue(42, "image")).toBe("");
+  });
+
+  it("round-trips an image link as a plain string", () => {
+    const v = { photo: "https://cdn.example/p/jacket.jpg" };
+    const [n] = fromJson(v);
+    expect(n.type).toBe("image");
+    expect(toJson([n])).toEqual(v);
   });
 
   it("changeType complex → leaf drops the subtree, leaf → complex starts empty", () => {

@@ -123,6 +123,9 @@ entity-agnostic.
   `GET /subjects`, `GET /me`, `GET /admin/rbac/roles`, `/entity-types`, `/organisation-roles` stay
   open. `administrator` joins the seed role list. `seed_rbac` defaults may be nested per resource
   type with a `"*"` fallback.
+- 2026-09-19 (0.10.1): AttrsEditor leaf type `image` (image link). The value stays a plain URL
+  string in `attrs` (no wrapper object, no schema); it is recognised by extension or
+  `data:image` URI and rendered as a thumbnail. Only http(s)/data:image sources go into `<img>`.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions

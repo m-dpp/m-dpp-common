@@ -1,14 +1,16 @@
 /**
  * The AttrsEditor tree model: a plain JSON object ⇄ a tree of typed nodes.
  *
- * - leaf:    text | number | boolean | date   (date = ISO calendar date "YYYY-MM-DD")
+ * - leaf:    text | number | boolean | date | image
+ *            (date = ISO calendar date "YYYY-MM-DD"; image = a URL string pointing at an
+ *             image — stored as a plain string, recognised by extension or data:image/ URI)
  * - complex: object (named children) | list (ordered, unnamed children)
  *
  * Free-form: any key, any depth, no schema. All operations are immutable and
  * return new arrays so React state stays simple.
  */
 
-export type LeafType = "text" | "number" | "boolean" | "date";
+export type LeafType = "text" | "number" | "boolean" | "date" | "image";
 export type ComplexType = "object" | "list";
 export type NodeType = LeafType | ComplexType;
 export type LeafValue = string | number | boolean | null;
@@ -28,7 +30,7 @@ export interface AttrNode {
   collapsed?: boolean;
 }
 
-export const LEAF_TYPES: LeafType[] = ["text", "number", "boolean", "date"];
+export const LEAF_TYPES: LeafType[] = ["text", "number", "boolean", "date", "image"];
 export const COMPLEX_TYPES: ComplexType[] = ["object", "list"];
 export const NODE_TYPES: NodeType[] = [...LEAF_TYPES, ...COMPLEX_TYPES];
 
@@ -47,12 +49,34 @@ export function isDateString(v: unknown): v is string {
   return typeof v === "string" && DATE_RE.test(v) && !Number.isNaN(Date.parse(v));
 }
 
+const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)(\?[^#]*)?(#.*)?$/i;
+const IMAGE_DATA_RE = /^data:image\/[a-z0-9.+-]+[;,]/i;
+
+/** A string that points at an image: http(s) URL with an image extension, or a data:image URI. */
+export function isImageUrl(v: unknown): v is string {
+  if (typeof v !== "string" || v.length > 4096) return false;
+  const s = v.trim();
+  if (IMAGE_DATA_RE.test(s)) return true;
+  if (!/^https?:\/\//i.test(s)) return false;
+  try {
+    return IMAGE_EXT_RE.test(new URL(s).pathname + (new URL(s).search || ""));
+  } catch {
+    return false;
+  }
+}
+
+/** Safe to render in an <img>: http(s) or data:image only (never javascript: etc.). */
+export function isRenderableImageSrc(v: unknown): v is string {
+  return typeof v === "string" && (/^https?:\/\//i.test(v.trim()) || IMAGE_DATA_RE.test(v.trim()));
+}
+
 export function inferType(v: unknown): NodeType {
   if (Array.isArray(v)) return "list";
   if (v !== null && typeof v === "object") return "object";
   if (typeof v === "number") return "number";
   if (typeof v === "boolean") return "boolean";
   if (isDateString(v)) return "date";
+  if (isImageUrl(v)) return "image";
   return "text";
 }
 
@@ -71,6 +95,8 @@ export function defaultValue(type: LeafType): LeafValue {
     case "boolean":
       return false;
     case "date":
+      return "";
+    case "image":
       return "";
     default:
       return "";
@@ -145,6 +171,9 @@ export function coerceValue(value: LeafValue, to: LeafType): LeafValue {
     }
     case "date":
       return isDateString(value) ? value : "";
+    case "image":
+      // keep whatever string is there (the user is about to paste/edit a URL); non-strings reset
+      return typeof value === "string" ? value : "";
     default:
       return value === null || value === undefined ? "" : String(value);
   }
