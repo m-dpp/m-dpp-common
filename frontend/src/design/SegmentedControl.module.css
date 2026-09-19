@@ -1,0 +1,11 @@
+.seg { display: inline-flex; padding: 2px; border-radius: var(--mdpp-radius); background: var(--mdpp-accent-soft); gap: 2px; }
+.opt {
+  height: 26px; padding: 0 11px; border: none; border-radius: 5px; background: transparent;
+  font: inherit; font-size: var(--mdpp-fs-xs); font-weight: 500; color: var(--mdpp-text-2); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; transition: background 120ms, color 120ms;
+}
+.opt:hover:not(:disabled) { color: var(--mdpp-text); }
+.opt:disabled { opacity: 0.5; cursor: not-allowed; }
+.active { background: var(--mdpp-surface); color: var(--mdpp-text); box-shadow: var(--mdpp-shadow); }
+.count { color: var(--mdpp-muted); font-variant-numeric: tabular-nums; }
+.sm .opt { height: 22px; padding: 0 8px; }

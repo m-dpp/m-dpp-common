@@ -1,0 +1,8 @@
+.wrap { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: var(--mdpp-fs-sm); color: var(--mdpp-text-2); user-select: none; }
+.wrap[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
+.track { position: relative; width: 30px; height: 17px; border-radius: 999px; background: var(--mdpp-faint); transition: background 120ms; flex-shrink: 0; }
+.on .track { background: var(--mdpp-accent); }
+.knob { position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; transition: transform 120ms; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.on .knob { transform: translateX(13px); }
+.input { position: absolute; opacity: 0; width: 0; height: 0; }
+.wrap:focus-within .track { box-shadow: 0 0 0 3px var(--mdpp-accent-soft); }

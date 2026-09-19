@@ -1,0 +1,28 @@
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: var(--mdpp-control-h); padding: 0 12px;
+  border-radius: var(--mdpp-radius); border: 1px solid transparent;
+  font: inherit; font-size: var(--mdpp-fs-sm); font-weight: 500; line-height: 1;
+  cursor: pointer; white-space: nowrap; user-select: none;
+  transition: background 120ms, border-color 120ms, color 120ms;
+}
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:focus-visible { outline: 2px solid var(--mdpp-accent-soft); outline-offset: 1px; border-color: var(--mdpp-accent); }
+
+.primary { background: var(--mdpp-accent); color: var(--mdpp-accent-text); border-color: var(--mdpp-accent); }
+.primary:hover:not(:disabled) { background: var(--mdpp-accent-hover); }
+
+.ghost { background: transparent; color: var(--mdpp-text-2); border-color: transparent; }
+.ghost:hover:not(:disabled) { background: var(--mdpp-accent-soft); color: var(--mdpp-text); }
+
+.outline { background: var(--mdpp-surface); color: var(--mdpp-text-2); border-color: var(--mdpp-border); }
+.outline:hover:not(:disabled) { border-color: var(--mdpp-faint); color: var(--mdpp-text); }
+
+.danger { background: transparent; color: var(--mdpp-error); border-color: transparent; }
+.danger:hover:not(:disabled) { background: var(--mdpp-error-bg); }
+
+.sm { height: var(--mdpp-control-h-sm); padding: 0 9px; font-size: var(--mdpp-fs-xs); }
+.lg { height: 38px; padding: 0 16px; font-size: var(--mdpp-fs); }
+.block { width: 100%; }
+.icon { padding: 0; width: var(--mdpp-control-h); }
+.icon.sm { width: var(--mdpp-control-h-sm); }

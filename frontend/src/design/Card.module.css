@@ -1,0 +1,8 @@
+.card { background: var(--mdpp-surface); border: 1px solid var(--mdpp-border); border-radius: var(--mdpp-radius-lg); box-shadow: var(--mdpp-shadow); }
+.header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--mdpp-border-2); min-height: 46px; }
+.title { font-size: var(--mdpp-fs); font-weight: 600; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.subtitle { color: var(--mdpp-muted); font-size: var(--mdpp-fs-xs); font-weight: 400; }
+.actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.body { padding: 16px; }
+.flush { padding: 0; }
+.footer { padding: 10px 16px; border-top: 1px solid var(--mdpp-border-2); display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
