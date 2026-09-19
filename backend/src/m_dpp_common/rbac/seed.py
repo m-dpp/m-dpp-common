@@ -21,6 +21,7 @@ JRC_ROLES: list[tuple[str, str, str]] = [
     ("authority", "Authority", "Regulatory authority — full read access"),
     ("economic_operator", "Economic Operator", "Economic operator — full read/write"),
     ("laboratory", "Laboratory", "Laboratory (e.g. CoE HAN BioCentre)"),
+    ("administrator", "Administrator", "Platform administrator — manages roles, access rules and identities"),
 ]
 
 # Safe defaults for a role the service's policy does not mention (e.g. one created
@@ -29,6 +30,21 @@ NEW_ROLE_RESOURCE_DEFAULTS: dict = dict(
     can_list=True, can_read=True, can_create=False, can_update=False, can_delete=False
 )
 NEW_ROLE_ATTR_DEFAULTS: dict = dict(can_read=True, can_write=False)
+
+
+def _defaults_for(res_defaults: dict | None, resource_type: str) -> dict:
+    """Resolve a role's resource defaults for one resource type.
+
+    ``res_defaults`` is either a flat permission dict applied to every resource type
+    (``{"can_list": True, ...}``) or a nested one keyed by resource type with an
+    optional ``"*"`` fallback (``{"products": {...}, "rbac": {...}, "*": {...}}``).
+    """
+    if not res_defaults:
+        return NEW_ROLE_RESOURCE_DEFAULTS
+    nested = all(isinstance(v, dict) for v in res_defaults.values())
+    if not nested:
+        return res_defaults
+    return res_defaults.get(resource_type) or res_defaults.get("*") or NEW_ROLE_RESOURCE_DEFAULTS
 
 
 def _unpack_role(entry) -> tuple[str, str | None, str]:
@@ -53,7 +69,6 @@ async def fan_out_role(
 ) -> dict:
     """Add the missing permission rows for one role. Does not commit."""
     Res = resource_permission_model
-    res_defaults = resource_defaults or NEW_ROLE_RESOURCE_DEFAULTS
     existing = {
         rt
         for (rt,) in (
@@ -63,7 +78,7 @@ async def fan_out_role(
     added_res = 0
     for resource_type in resource_types:
         if resource_type not in existing:
-            db.add(Res(role_name=role_name, resource_type=resource_type, **res_defaults))
+            db.add(Res(role_name=role_name, resource_type=resource_type, **_defaults_for(resource_defaults, resource_type)))
             added_res += 1
 
     added_attr = 0
@@ -138,7 +153,11 @@ async def seed_rbac(
     attribute_model=None,
 ) -> None:
     """Insert any missing roles, then fan out permission rows for *every* stored role
-    (seeded or created at runtime). Idempotent; commits once."""
+    (seeded or created at runtime). Idempotent; commits once.
+
+    ``resource_defaults`` maps role name → permissions, where the permissions are a
+    flat dict (same for every resource type) or a dict keyed by resource type with
+    an optional ``"*"`` fallback — see :func:`_defaults_for`."""
     for position, entry in enumerate(roles):
         name, label, description = _unpack_role(entry)
         existing = await db.execute(select(role_model).where(role_model.name == name))

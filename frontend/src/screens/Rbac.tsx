@@ -19,15 +19,30 @@ type Tab = "roles" | "attributes" | "resources";
 
 export interface RbacProps {
   initialTab?: Tab;
+  /** The resource type the host's policy uses for the access-control surface itself. */
+  resourceType?: string;
 }
 
 /** Roles (dynamic data), attribute visibility per entity type, resource access. Every
- *  column here is rendered from the fetched roles — nothing is hardcoded. */
-export function Rbac({ initialTab = "attributes" }: RbacProps) {
+ *  column here is rendered from the fetched roles — nothing is hardcoded. Reading the
+ *  matrices needs `read` on `resourceType`; changing them needs `create`/`update`/`delete`. */
+export function Rbac({ initialTab = "attributes", resourceType = "rbac" }: RbacProps) {
   const api = useApi();
+  const { can } = usePrincipal();
   const [tab, setTab] = useState<Tab>(initialTab);
   const roles = useAsync(() => api.listRoles(), [api]);
   const activeRoles = useMemo(() => (roles.data ?? []).filter((r) => r.active), [roles.data]);
+
+  if (!can(resourceType, "read")) {
+    return (
+      <Card>
+        <CardBody>
+          <EmptyState title="Access control is not visible to your roles" description={`Reading the access rules needs "read" on "${resourceType}". Switch to an administrator to manage them.`} />
+        </CardBody>
+      </Card>
+    );
+  }
+  const perms = { create: can(resourceType, "create"), update: can(resourceType, "update"), delete: can(resourceType, "delete") };
 
   return (
     <>
@@ -43,16 +58,19 @@ export function Rbac({ initialTab = "attributes" }: RbacProps) {
         />
       </div>
       {roles.error && <Notice tone="error">{roles.error}</Notice>}
-      {tab === "roles" && <RolesPanel roles={roles.data ?? []} onChanged={roles.reload} />}
-      {tab === "attributes" && <AttributesPanel roles={activeRoles} />}
-      {tab === "resources" && <ResourcesPanel roles={activeRoles} />}
+      {!perms.update && <Notice tone="info">Read-only: your roles may view these rules but not change them.</Notice>}
+      {tab === "roles" && <RolesPanel roles={roles.data ?? []} onChanged={roles.reload} perms={perms} />}
+      {tab === "attributes" && <AttributesPanel roles={activeRoles} perms={perms} />}
+      {tab === "resources" && <ResourcesPanel roles={activeRoles} perms={perms} />}
     </>
   );
 }
 
 // ---------------------------------------------------------------- roles
 
-function RolesPanel({ roles, onChanged }: { roles: Role[]; onChanged: () => Promise<void> }) {
+type Perms = { create: boolean; update: boolean; delete: boolean };
+
+function RolesPanel({ roles, onChanged, perms }: { roles: Role[]; onChanged: () => Promise<void>; perms: Perms }) {
   const api = useApi();
   const { refresh } = usePrincipal();
   const [adding, setAdding] = useState(false);
@@ -75,9 +93,11 @@ function RolesPanel({ roles, onChanged }: { roles: Role[]; onChanged: () => Prom
         title="Roles"
         subtitle="actor identities — access is defined in the matrices, not in the names"
         actions={
-          <Button variant="primary" size="sm" onClick={() => setAdding(true)}>
-            ＋ Add role
-          </Button>
+          perms.create && (
+            <Button variant="primary" size="sm" onClick={() => setAdding(true)}>
+              ＋ Add role
+            </Button>
+          )
         }
       />
       <CardBody flush>
@@ -99,7 +119,7 @@ function RolesPanel({ roles, onChanged }: { roles: Role[]; onChanged: () => Prom
               key: "toggle",
               header: "",
               align: "right",
-              render: (r) => <Toggle checked={r.active} onChange={(v) => toggle(r, v)} label={r.active ? "Deactivate" : "Activate"} />,
+              render: (r) => <Toggle checked={r.active} disabled={!perms.update} onChange={(v) => toggle(r, v)} label={r.active ? "Deactivate" : "Activate"} />,
             },
           ]}
         />
@@ -163,7 +183,7 @@ type Access = "none" | "read" | "rw";
 const toAccess = (p: AttrPermission): Access => (p.can_write ? "rw" : p.can_read ? "read" : "none");
 const fromAccess = (a: Access) => ({ can_read: a !== "none", can_write: a === "rw" });
 
-function AttributesPanel({ roles }: { roles: Role[] }) {
+function AttributesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
   const api = useApi();
   const { refresh } = usePrincipal();
   const entityTypes = useAsync(() => api.listEntityTypes(), [api]);
@@ -235,12 +255,16 @@ function AttributesPanel({ roles }: { roles: Role[] }) {
             {entityTypes.data && entityTypes.data.length > 0 && (
               <SegmentedControl size="sm" value={entityType} onChange={setEntityType} options={entityTypes.data.map((t) => ({ value: t, label: t }))} aria-label="Entity type" />
             )}
-            <Button size="sm" onClick={sync} title="Discover attribute keys from stored data (never deletes)">
-              Sync from data
-            </Button>
-            <Button size="sm" variant="primary" disabled={!entityType} onClick={() => setAdding(true)}>
-              ＋ Add attribute
-            </Button>
+            {perms.create && (
+              <Button size="sm" onClick={sync} title="Discover attribute keys from stored data (never deletes)">
+                Sync from data
+              </Button>
+            )}
+            {perms.create && (
+              <Button size="sm" variant="primary" disabled={!entityType} onClick={() => setAdding(true)}>
+                ＋ Add attribute
+              </Button>
+            )}
           </>
         }
       />
@@ -275,7 +299,7 @@ function AttributesPanel({ roles }: { roles: Role[] }) {
                       <span className={s.origin} title={a.origin === "manual" ? "registered by an admin" : "discovered from stored data"}>
                         {a.origin}
                       </span>
-                      {a.origin === "manual" && (
+                      {a.origin === "manual" && perms.delete && (
                         <button type="button" className={s.removeAttr} onClick={() => removeAttr(a.id)} aria-label={`Remove ${a.attr_key}`} title="Remove registration (manual attributes only)">
                           ×
                         </button>
@@ -293,7 +317,7 @@ function AttributesPanel({ roles }: { roles: Role[] }) {
                           size_="sm"
                           className={[s.cell, s[acc]].join(" ")}
                           value={acc}
-                          disabled={busyKey === p.id}
+                          disabled={busyKey === p.id || !perms.update}
                           onChange={(e) => setAccess(p, e.target.value as Access)}
                           aria-label={`${a.attr_key} for ${r.label}`}
                           options={[
@@ -364,18 +388,18 @@ function AddAttributeModal({ open, entityType, onClose, onAdded }: { open: boole
 
 const ACTIONS: ResourceAction[] = ["list", "read", "create", "update", "delete"];
 
-function ResourcesPanel({ roles }: { roles: Role[] }) {
+function ResourcesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
   const api = useApi();
   const { refresh } = usePrincipal();
-  const perms = useAsync(() => api.listResourcePermissions(), [api]);
+  const resPerms = useAsync(() => api.listResourcePermissions(), [api]);
   const [err, setErr] = useState<string | null>(null);
-  const resourceTypes = useMemo(() => Array.from(new Set((perms.data ?? []).map((p) => p.resource_type))).sort(), [perms.data]);
+  const resourceTypes = useMemo(() => Array.from(new Set((resPerms.data ?? []).map((p) => p.resource_type))).sort(), [resPerms.data]);
 
   async function set(p: ResourcePermission, action: ResourceAction, v: boolean) {
     setErr(null);
     try {
       const updated = await api.updateResourcePermission(p.id, { [`can_${action}`]: v });
-      perms.setData((prev) => (prev ?? []).map((x) => (x.id === updated.id ? updated : x)));
+      resPerms.setData((prev) => (prev ?? []).map((x) => (x.id === updated.id ? updated : x)));
       await refresh();
     } catch (e) {
       setErr(errorMessage(e));
@@ -385,7 +409,7 @@ function ResourcesPanel({ roles }: { roles: Role[] }) {
   return (
     <div className="mdpp-stack" style={{ gap: 16 }}>
       {err && <Notice tone="error">{err}</Notice>}
-      {resourceTypes.length === 0 && <Card><CardBody><EmptyState compact title={perms.loading ? "Loading…" : "No resource permissions"} /></CardBody></Card>}
+      {resourceTypes.length === 0 && <Card><CardBody><EmptyState compact title={resPerms.loading ? "Loading…" : "No resource permissions"} /></CardBody></Card>}
       {resourceTypes.map((rt) => (
         <Card key={rt}>
           <CardHeader title={rt} subtitle="role × operation" />
@@ -401,7 +425,7 @@ function ResourcesPanel({ roles }: { roles: Role[] }) {
               </thead>
               <tbody>
                 {roles.map((r) => {
-                  const p = (perms.data ?? []).find((x) => x.resource_type === rt && x.role_name === r.name);
+                  const p = (resPerms.data ?? []).find((x) => x.resource_type === rt && x.role_name === r.name);
                   return (
                     <tr key={r.name}>
                       <td>
@@ -411,7 +435,7 @@ function ResourcesPanel({ roles }: { roles: Role[] }) {
                         <td key={a}>
                           {p ? (
                             <label className={s.check}>
-                              <input type="checkbox" checked={p[`can_${a}`]} onChange={(e) => set(p, a, e.target.checked)} aria-label={`${r.label} may ${a} ${rt}`} />
+                              <input type="checkbox" checked={p[`can_${a}`]} disabled={!perms.update} onChange={(e) => set(p, a, e.target.checked)} aria-label={`${r.label} may ${a} ${rt}`} />
                             </label>
                           ) : (
                             <span className={s.none} title="no row: allowed (dev posture)">—</span>

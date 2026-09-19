@@ -118,7 +118,11 @@ entity-agnostic.
   (`RBAC_ANONYMOUS_ROLE`, default `public`), never a privileged default.
 - 2026-09-19: a principal carries `roles` (list); the engine applies **union** semantics (allowed
   if any held role allows; readable/writable if any may). `principal["role"]` kept as compat.
-- 2026-09-19: `/subjects`, `/memberships`, `/me` are dev-admin endpoints, not RBAC-gated.
+- 2026-09-19 (0.10.0): the RBAC admin router and the subjects router pass the resource gate when
+  the service passes `get_principal`/`rbac_engine` (resource types `rbac` and `subjects`). Only
+  `GET /subjects`, `GET /me`, `GET /admin/rbac/roles`, `/entity-types`, `/organisation-roles` stay
+  open. `administrator` joins the seed role list. `seed_rbac` defaults may be nested per resource
+  type with a `"*"` fallback.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions

@@ -69,7 +69,9 @@ app.include_router(make_subjects_router(
 ))
 ```
 
-`/subjects`, `/memberships` and `/me` are development-admin endpoints and are not RBAC-gated (an anonymous session must be able to pick an identity in the switcher).
+**Gating (0.10+).** Pass `rbac_engine=` to `make_subjects_router` and `get_principal=` + `rbac_engine=` to `make_rbac_router`, and seed a policy for the resource types `subjects` and `rbac`: subject/membership writes and every RBAC admin endpoint then pass the resource gate (GET → read/list, POST → create, PATCH → update, DELETE → delete). Reference reads stay open — `GET /subjects` and `GET /me` (the dev switcher needs them before an identity is chosen), `GET /admin/rbac/roles`, `/entity-types` and `/organisation-roles` (role labels and an organisation's nature are public data). Without those arguments the routers are open, as before.
+
+`seed_rbac(resource_defaults=...)` accepts, per role, either a flat permission dict (same for every resource type) or a dict keyed by resource type with a `"*"` fallback, e.g. `{"products": FULL, "rbac": NONE, "*": READ}`. The seed role list includes `administrator` (manages roles, access rules, identities) — grant it to the organisation that runs the instance.
 
 ---
 
@@ -78,7 +80,7 @@ app.include_router(make_subjects_router(
 Each service pins a tag in its `requirements.txt` (public repo → plain `git+https`, note the `subdirectory`):
 
 ```
-m-dpp-common @ git+https://github.com/m-dpp/m-dpp-common@v0.9.0#subdirectory=backend
+m-dpp-common @ git+https://github.com/m-dpp/m-dpp-common@v0.10.0#subdirectory=backend
 ```
 
 Working on it locally:
@@ -152,7 +154,7 @@ import { ApiProvider, PrincipalProvider, AppShell, ActingAsSwitcher, Organisatio
 </ApiProvider>
 ```
 
-`useApi()` gives screens the client; `usePrincipal()` gives `{principal, can(resource, action), refresh}` so a host can hide/disable actions the resolved roles may not perform. `useActingAs()` reads/sets the identity the UI acts as (dev only).
+`useApi()` gives screens the client; `usePrincipal()` gives `{principal, can(resource, action), refresh}` so a host can hide/disable actions the resolved roles may not perform. `useActingAs()` reads/sets the identity the UI acts as (dev only). The shared screens gate themselves with `can()` on a `resourceType` prop (`Organisations` → `organisations` plus `rolesResourceType` `rbac` for role assignment, `UsersAndLinks` → `subjects`, `Rbac` → `rbac`); a host hides nav entries the same way.
 
 ### API client contract (`src/api`)
 
