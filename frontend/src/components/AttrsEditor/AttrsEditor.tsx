@@ -19,6 +19,7 @@ import {
   fromJsonValue,
   hasChildren,
   isComplex,
+  isRenderableImageSrc,
   newComplex,
   newLeaf,
   removeNode,
@@ -63,9 +64,31 @@ const TYPE_LABEL: Record<NodeType, string> = {
   number: "number",
   boolean: "boolean",
   date: "date",
+  image: "image link",
   object: "object",
   list: "list",
 };
+
+// ==================================================================== image
+
+/** Small thumbnail for an image-link value; opens the full image in a new tab. Falls back
+ *  to the URL as text when it cannot be loaded or is not a renderable source. */
+function ImageThumb({ url, size = "sm" }: { url: string; size?: "sm" | "md" }) {
+  const [broken, setBroken] = useState(false);
+  const src = url.trim();
+  if (!isRenderableImageSrc(src) || broken) {
+    return (
+      <span className={s.imgBroken} title={broken ? "image could not be loaded" : "not an http(s) or data:image URL"}>
+        {src.length > 80 ? `${src.slice(0, 77)}…` : src}
+      </span>
+    );
+  }
+  return (
+    <a href={src} target="_blank" rel="noreferrer noopener" className={s.imgLink} title={src}>
+      <img className={[s.thumb, size === "md" ? s.thumbMd : ""].join(" ")} src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} />
+    </a>
+  );
+}
 
 // ==================================================================== view
 
@@ -73,6 +96,7 @@ function ViewValue({ node }: { node: AttrNode }) {
   if (node.value === null || node.value === undefined || node.value === "") return <span className={s.nil}>—</span>;
   if (node.type === "number") return <span className={s.num}>{String(node.value)}</span>;
   if (node.type === "boolean") return <span className={s.bool}>{node.value ? "true" : "false"}</span>;
+  if (node.type === "image") return <ImageThumb url={String(node.value)} />;
   return <span>{String(node.value)}</span>;
 }
 
@@ -165,6 +189,15 @@ function LeafInput({ node, disabled, onValue }: { node: AttrNode; disabled?: boo
       );
     case "date":
       return <Input size_="sm" type="date" disabled={disabled} value={typeof node.value === "string" ? node.value : ""} onChange={(e) => onValue(e.target.value)} />;
+    case "image": {
+      const url = typeof node.value === "string" ? node.value : "";
+      return (
+        <div className={s.imgEdit}>
+          <Input size_="sm" type="url" mono disabled={disabled} value={url} placeholder="https://…/photo.jpg" onChange={(e) => onValue(e.target.value)} title="Stored as a plain URL string; recognised as an image by its extension (.png .jpg .webp …) or a data:image URI" />
+          {url.trim() && <ImageThumb url={url} />}
+        </div>
+      );
+    }
     default:
       return <Input size_="sm" disabled={disabled} value={node.value === null || node.value === undefined ? "" : String(node.value)} onChange={(e) => onValue(e.target.value)} placeholder="value" />;
   }
