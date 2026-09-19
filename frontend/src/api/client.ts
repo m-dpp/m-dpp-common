@@ -62,6 +62,44 @@ export interface AdminApiClient {
   updateResourcePermission(id: string, body: Partial<Omit<ResourcePermission, "id" | "resource_type" | "role_name">>): Promise<ResourcePermission>;
 }
 
+/** Build a query string from defined, non-empty values (exported for app-specific clients). */
+export function queryString(query?: Record<string, string | number | boolean | undefined | null>): string {
+  if (!query) return "";
+  const parts = Object.entries(query)
+    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`);
+  return parts.length ? `?${parts.join("&")}` : "";
+}
+
+/** Low-level JSON request with the shared error shape and the acting-as identity header.
+ *  App-specific clients (e.g. dpp-app's products) build on this. */
+export async function requestJson<T>(
+  method: string,
+  url: string,
+  opts: { body?: unknown; getIdentity?: () => string | null; identityHeader?: string; fetchImpl?: typeof fetch } = {},
+): Promise<T> {
+  const f = opts.fetchImpl ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  const identity = opts.getIdentity?.();
+  if (identity) headers[opts.identityHeader ?? DEFAULT_IDENTITY_HEADER] = identity;
+  const res = await f(url, { method, headers, body: opts.body === undefined ? undefined : JSON.stringify(opts.body) });
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  let data: unknown = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+  if (!res.ok) {
+    const detail = data && typeof data === "object" && "detail" in (data as Record<string, unknown>) ? (data as Record<string, unknown>).detail : data;
+    const message = typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((d) => (d as { msg?: string }).msg ?? JSON.stringify(d)).join("; ") : `HTTP ${res.status}`;
+    throw new ApiError(res.status, detail, message);
+  }
+  return data as T;
+}
+
 export class ApiError extends Error {
   status: number;
   detail: unknown;
@@ -85,6 +123,9 @@ export interface FetchClientOptions {
   paths?: Partial<typeof DEFAULT_PATHS>;
 }
 
+/** Header the dev identity source reads. Only the dev identity path knows about it. */
+export const DEFAULT_IDENTITY_HEADER = "X-Dev-Sub";
+
 export const DEFAULT_PATHS = {
   organisations: "/organisations",
   rbac: "/admin/rbac",
@@ -96,36 +137,10 @@ export const DEFAULT_PATHS = {
 export function createFetchClient(opts: FetchClientOptions = {}): AdminApiClient {
   const base = (opts.baseUrl ?? "/api").replace(/\/+$/, "");
   const paths = { ...DEFAULT_PATHS, ...(opts.paths ?? {}) };
-  const header = opts.identityHeader ?? "X-Dev-Sub";
-  const f = opts.fetchImpl ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
+  const header = opts.identityHeader ?? DEFAULT_IDENTITY_HEADER;
 
-  async function req<T>(method: string, path: string, body?: unknown, query?: Record<string, string | boolean | undefined>): Promise<T> {
-    const qs = query
-      ? "?" +
-        Object.entries(query)
-          .filter(([, v]) => v !== undefined && v !== "")
-          .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-          .join("&")
-      : "";
-    const headers: Record<string, string> = { Accept: "application/json" };
-    if (body !== undefined) headers["Content-Type"] = "application/json";
-    const identity = opts.getIdentity?.();
-    if (identity) headers[header] = identity;
-    const res = await f(`${base}${path}${qs === "?" ? "" : qs}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-    if (res.status === 204) return undefined as T;
-    const text = await res.text();
-    let data: unknown = null;
-    try {
-      data = text ? JSON.parse(text) : null;
-    } catch {
-      data = text;
-    }
-    if (!res.ok) {
-      const detail = data && typeof data === "object" && "detail" in (data as Record<string, unknown>) ? (data as Record<string, unknown>).detail : data;
-      throw new ApiError(res.status, detail, typeof detail === "string" ? detail : Array.isArray(detail) ? detail.map((d) => (d as { msg?: string }).msg ?? JSON.stringify(d)).join("; ") : `HTTP ${res.status}`);
-    }
-    return data as T;
-  }
+  const req = <T,>(method: string, path: string, body?: unknown, query?: Record<string, string | boolean | undefined>) =>
+    requestJson<T>(method, `${base}${path}${queryString(query)}`, { body, getIdentity: opts.getIdentity, identityHeader: header, fetchImpl: opts.fetchImpl });
 
   const rbac = paths.rbac;
   return {
