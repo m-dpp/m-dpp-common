@@ -1,5 +1,5 @@
 from m_dpp_common.rbac.admin import make_rbac_router
-from m_dpp_common.rbac.engine import BoundRbac, RbacEngine
+from m_dpp_common.rbac.engine import BoundRbac, RbacEngine, as_roles, principal_roles
 from m_dpp_common.rbac.models import (
     ATTR_ORIGIN_DISCOVERED,
     ATTR_ORIGIN_MANUAL,
@@ -22,6 +22,8 @@ __all__ = [
     "make_rbac_router",
     "RbacEngine",
     "BoundRbac",
+    "principal_roles",
+    "as_roles",
     "RoleMixin",
     "RbacAttributeMixin",
     "AttrPermissionMixin",

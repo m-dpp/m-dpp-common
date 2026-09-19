@@ -11,7 +11,8 @@ could not write — are left exactly as stored.
 ``dpp-app`` and ``mdpp-app`` mount the *same* endpoints against their *own*
 ``organisations`` table and ``@context`` document, so those are constructor
 arguments. The RBAC checks route through the service's :class:`RbacEngine`
-instance; auth defaults to the shared dev stub.
+instance; pass the service's ``get_principal`` (built with
+``m_dpp_common.auth.make_get_principal``). The default is the legacy dev stub.
 
 A GLN is optional and lives in ``attrs["gln"]`` (see
 :mod:`m_dpp_common.organisation.models`), so the by-GLN lookup is a JSONB query
@@ -29,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from m_dpp_common.auth import get_principal as _default_get_principal
 from m_dpp_common.organisation.schemas import OrganisationCreate, OrganisationUpdate
 from m_dpp_common.orm import apply_attrs_patch
+from m_dpp_common.rbac.engine import principal_roles
 
 
 def make_organisation_router(
@@ -73,7 +75,7 @@ def make_organisation_router(
         await rbac_engine.check_resource_permission(principal, "create", _RESOURCE, db)
         data = body.model_dump()
         await rbac_engine.assert_writable_attrs(
-            data.get("attrs"), principal["role"], db, entity_type=_RESOURCE
+            data.get("attrs"), principal_roles(principal), db, entity_type=_RESOURCE
         )
         obj = Organisation(**data)
         db.add(obj)
@@ -86,7 +88,7 @@ def make_organisation_router(
             )
         await db.refresh(obj)
         readable_attrs = await rbac_engine.filter_readable_attrs(
-            obj.attrs, principal["role"], db, entity_type=_RESOURCE
+            obj.attrs, principal_roles(principal), db, entity_type=_RESOURCE
         )
         return _to_jsonld(obj, readable_attrs)
 
@@ -101,7 +103,7 @@ def make_organisation_router(
         out = []
         for org in orgs:
             readable_attrs = await rbac_engine.filter_readable_attrs(
-                org.attrs, principal["role"], db, entity_type=_RESOURCE
+                org.attrs, principal_roles(principal), db, entity_type=_RESOURCE
             )
             out.append(_to_jsonld(org, readable_attrs))
         return out
@@ -121,7 +123,7 @@ def make_organisation_router(
         if obj is None:
             raise HTTPException(status_code=404, detail="Organisation not found")
         readable_attrs = await rbac_engine.filter_readable_attrs(
-            obj.attrs, principal["role"], db, entity_type=_RESOURCE
+            obj.attrs, principal_roles(principal), db, entity_type=_RESOURCE
         )
         return _to_jsonld(obj, readable_attrs)
 
@@ -137,7 +139,7 @@ def make_organisation_router(
         if obj is None:
             raise HTTPException(status_code=404, detail="Organisation not found")
         readable_attrs = await rbac_engine.filter_readable_attrs(
-            obj.attrs, principal["role"], db, entity_type=_RESOURCE
+            obj.attrs, principal_roles(principal), db, entity_type=_RESOURCE
         )
         return _to_jsonld(obj, readable_attrs)
 
@@ -163,7 +165,7 @@ def make_organisation_router(
                 # Merge, never replace: only the keys named here are touched, and
                 # each of them (set or removed) needs write permission.
                 await rbac_engine.assert_writable_attrs(
-                    value, principal["role"], db, entity_type=_RESOURCE
+                    value, principal_roles(principal), db, entity_type=_RESOURCE
                 )
                 value = apply_attrs_patch(obj.attrs, value)
             setattr(obj, field, value)
@@ -176,7 +178,7 @@ def make_organisation_router(
             )
         await db.refresh(obj)
         readable_attrs = await rbac_engine.filter_readable_attrs(
-            obj.attrs, principal["role"], db, entity_type=_RESOURCE
+            obj.attrs, principal_roles(principal), db, entity_type=_RESOURCE
         )
         return _to_jsonld(obj, readable_attrs)
 

@@ -19,22 +19,27 @@ stays empty (same shape as the RBAC mixins in :mod:`m_dpp_common.rbac.models`).
 """
 
 from sqlalchemy import Index, String, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 from m_dpp_common.orm import EntityMixin
 
 
 class OrganisationMixin(EntityMixin):
     __tablename__ = "organisations"
-    __table_args__ = (
-        Index(
-            "uq_organisations_gln",
-            text("(attrs->>'gln')"),
-            unique=True,
-            # jsonb_exists(...) rather than the `?` operator — `?` collides with
-            # driver paramstyles when the DDL round-trips through SQLAlchemy.
-            postgresql_where=text("jsonb_exists(attrs, 'gln')"),
-        ),
-    )
+
+    # declared_attr so every binding (each service, the test suite) gets a fresh
+    # Index object — an Index instance can only belong to one Table.
+    @declared_attr.directive
+    def __table_args__(cls):
+        return (
+            Index(
+                "uq_organisations_gln",
+                text("(attrs->>'gln')"),
+                unique=True,
+                # jsonb_exists(...) rather than the `?` operator — `?` collides with
+                # driver paramstyles when the DDL round-trips through SQLAlchemy.
+                postgresql_where=text("jsonb_exists(attrs, 'gln')"),
+            ),
+        )
 
     name: Mapped[str] = mapped_column(String, nullable=False)
