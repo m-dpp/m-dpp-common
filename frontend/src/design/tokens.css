@@ -1,0 +1,87 @@
+/* mDPP design tokens — lean, white, one accent, status colour only for meaning. */
+:root {
+  --mdpp-page: #f5f6f7;
+  --mdpp-surface: #ffffff;
+  --mdpp-surface-2: #fafbfb;
+
+  --mdpp-text: #1a1a1a;
+  --mdpp-text-2: #3f4448;
+  --mdpp-muted: #8a9196;
+  --mdpp-faint: #b4bbc0;
+
+  --mdpp-border: #e8eaed;
+  --mdpp-border-2: #eef0f2;
+
+  --mdpp-accent: #2f3b52;
+  --mdpp-accent-hover: #24304a;
+  --mdpp-accent-soft: #eef1f6;
+  --mdpp-accent-text: #ffffff;
+
+  --mdpp-ok: #3f9c6d;
+  --mdpp-ok-bg: #e9f5ee;
+  --mdpp-warn: #c98a2b;
+  --mdpp-warn-bg: #faf1e2;
+  --mdpp-error: #c0564a;
+  --mdpp-error-bg: #f9e9e7;
+
+  --mdpp-radius: 7px;
+  --mdpp-radius-lg: 8px;
+  --mdpp-shadow: 0 1px 2px rgba(20, 24, 32, 0.04), 0 1px 6px rgba(20, 24, 32, 0.04);
+  --mdpp-shadow-lg: 0 8px 30px rgba(20, 24, 32, 0.12);
+
+  --mdpp-font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mdpp-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --mdpp-fs: 13.5px;
+  --mdpp-fs-sm: 12px;
+  --mdpp-fs-xs: 11px;
+  --mdpp-fs-lg: 15px;
+  --mdpp-fs-xl: 18px;
+
+  --mdpp-sp-1: 4px;
+  --mdpp-sp-2: 8px;
+  --mdpp-sp-3: 12px;
+  --mdpp-sp-4: 16px;
+  --mdpp-sp-5: 24px;
+  --mdpp-sp-6: 32px;
+
+  --mdpp-control-h: 32px;
+  --mdpp-control-h-sm: 26px;
+  --mdpp-sidebar-w: 232px;
+  --mdpp-header-h: 52px;
+}
+
+html, body {
+  margin: 0;
+  background: var(--mdpp-page);
+  color: var(--mdpp-text);
+  font-family: var(--mdpp-font);
+  font-size: var(--mdpp-fs);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+
+a { color: var(--mdpp-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+code, .mdpp-mono { font-family: var(--mdpp-mono); font-size: 0.93em; }
+
+h1, h2, h3, h4 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+h1 { font-size: var(--mdpp-fs-xl); }
+h2 { font-size: var(--mdpp-fs-lg); }
+h3 { font-size: var(--mdpp-fs); }
+p { margin: 0; }
+
+.mdpp-muted { color: var(--mdpp-muted); }
+.mdpp-faint { color: var(--mdpp-faint); }
+.mdpp-text-2 { color: var(--mdpp-text-2); }
+.mdpp-sm { font-size: var(--mdpp-fs-sm); }
+.mdpp-xs { font-size: var(--mdpp-fs-xs); }
+.mdpp-row { display: flex; align-items: center; gap: var(--mdpp-sp-2); }
+.mdpp-row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--mdpp-sp-2); }
+.mdpp-stack { display: flex; flex-direction: column; gap: var(--mdpp-sp-3); }
+.mdpp-grow { flex: 1; min-width: 0; }
+.mdpp-wrap { flex-wrap: wrap; }
+.mdpp-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdpp-page-pad { padding: var(--mdpp-sp-5); }

@@ -1,0 +1,6 @@
+.notice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--mdpp-radius); font-size: var(--mdpp-fs-sm); border: 1px solid var(--mdpp-border); background: var(--mdpp-surface-2); color: var(--mdpp-text-2); }
+.info { }
+.ok { background: var(--mdpp-ok-bg); border-color: transparent; color: var(--mdpp-ok); }
+.warn { background: var(--mdpp-warn-bg); border-color: transparent; color: #8a5a12; }
+.error { background: var(--mdpp-error-bg); border-color: transparent; color: var(--mdpp-error); }
+.dev { border-style: dashed; border-color: var(--mdpp-warn); background: var(--mdpp-warn-bg); color: #8a5a12; }

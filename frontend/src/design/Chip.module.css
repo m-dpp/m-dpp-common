@@ -1,0 +1,18 @@
+.chip {
+  display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px;
+  border-radius: 999px; font-size: var(--mdpp-fs-xs); font-weight: 500; line-height: 1; white-space: nowrap;
+  background: var(--mdpp-accent-soft); color: var(--mdpp-text-2);
+}
+.dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.8; }
+.ok { background: var(--mdpp-ok-bg); color: var(--mdpp-ok); }
+.warn { background: var(--mdpp-warn-bg); color: var(--mdpp-warn); }
+.error { background: var(--mdpp-error-bg); color: var(--mdpp-error); }
+.accent { background: var(--mdpp-accent); color: var(--mdpp-accent-text); }
+
+.tag {
+  display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 6px;
+  border-radius: 4px; border: 1px solid var(--mdpp-border); background: var(--mdpp-surface);
+  font-size: var(--mdpp-fs-xs); color: var(--mdpp-text-2); font-family: var(--mdpp-mono); white-space: nowrap;
+}
+.tagRemove { border: none; background: none; padding: 0; margin-left: 2px; cursor: pointer; color: var(--mdpp-muted); font: inherit; line-height: 1; }
+.tagRemove:hover { color: var(--mdpp-error); }

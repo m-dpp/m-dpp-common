@@ -1,0 +1,47 @@
+/* ---------- shared ---------- */
+.root { display: flex; flex-direction: column; gap: 2px; font-size: var(--mdpp-fs-sm); }
+.empty { color: var(--mdpp-muted); font-size: var(--mdpp-fs-sm); padding: 6px 0; }
+.children { margin-left: 14px; padding-left: 12px; border-left: 1px solid var(--mdpp-border); display: flex; flex-direction: column; gap: 2px; }
+.key { color: var(--mdpp-text-2); font-family: var(--mdpp-mono); font-size: var(--mdpp-fs-xs); }
+.index { color: var(--mdpp-muted); font-family: var(--mdpp-mono); font-size: var(--mdpp-fs-xs); }
+.typeHint { color: var(--mdpp-faint); font-size: var(--mdpp-fs-xs); }
+.count { color: var(--mdpp-muted); font-size: var(--mdpp-fs-xs); }
+
+/* ---------- view ---------- */
+.vrow { display: grid; grid-template-columns: minmax(120px, 34%) 1fr; gap: 12px; align-items: baseline; padding: 5px 0; border-bottom: 1px solid var(--mdpp-border-2); }
+.vrow:last-child { border-bottom: none; }
+.vrowComplex { grid-template-columns: 1fr; padding-bottom: 2px; border-bottom: none; }
+.vrowComplex > .children { margin-top: 4px; }
+.vkey { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+.vval { color: var(--mdpp-text); word-break: break-word; min-width: 0; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.num { font-variant-numeric: tabular-nums; }
+.bool { font-family: var(--mdpp-mono); }
+.nil { color: var(--mdpp-faint); }
+.inherited .vval, .inherited .vkey { color: var(--mdpp-muted); }
+.inherited .key { color: var(--mdpp-muted); }
+.source { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; color: var(--mdpp-muted); background: var(--mdpp-surface-2); border: 1px dashed var(--mdpp-border); border-radius: 999px; padding: 0 6px; height: 16px; white-space: nowrap; font-family: var(--mdpp-font); }
+.source::before { content: "↑"; color: var(--mdpp-faint); }
+.compact .vrow { padding: 3px 0; }
+
+/* ---------- edit ---------- */
+.erow { display: grid; grid-template-columns: 18px minmax(120px, 1fr) 92px minmax(140px, 1.4fr) 26px; gap: 6px; align-items: center; padding: 3px 4px; border-radius: 6px; }
+.erow:hover { background: var(--mdpp-surface-2); }
+.ecomplex { background: var(--mdpp-surface-2); border: 1px solid var(--mdpp-border-2); border-radius: 6px; padding: 2px; }
+.ecomplex > .erow { background: transparent; }
+.ecomplex > .children { margin: 2px 0 4px 20px; }
+.toggle { width: 18px; height: 22px; border: none; background: none; color: var(--mdpp-muted); cursor: pointer; padding: 0; font-size: 10px; display: grid; place-items: center; border-radius: 4px; }
+.toggle:hover { background: var(--mdpp-accent-soft); color: var(--mdpp-text); }
+.togglePlaceholder { width: 18px; }
+.indexBox { height: var(--mdpp-control-h-sm); display: flex; align-items: center; padding: 0 8px; border-radius: var(--mdpp-radius); border: 1px dashed var(--mdpp-border); color: var(--mdpp-muted); font-family: var(--mdpp-mono); font-size: var(--mdpp-fs-xs); background: var(--mdpp-surface); }
+.summary { color: var(--mdpp-muted); font-size: var(--mdpp-fs-xs); padding-left: 4px; display: flex; gap: 8px; align-items: center; }
+.remove { width: 26px; height: var(--mdpp-control-h-sm); border: none; background: none; color: var(--mdpp-faint); cursor: pointer; border-radius: 4px; font-size: 15px; line-height: 1; }
+.remove:hover:not(:disabled) { color: var(--mdpp-error); background: var(--mdpp-error-bg); }
+.remove:disabled { opacity: 0.35; cursor: not-allowed; }
+.adders { display: flex; gap: 4px; padding: 4px 0 2px 22px; }
+.adderBtn { height: 22px; padding: 0 8px; border-radius: 4px; border: 1px dashed var(--mdpp-border); background: transparent; color: var(--mdpp-muted); font: inherit; font-size: var(--mdpp-fs-xs); cursor: pointer; }
+.adderBtn:hover { border-color: var(--mdpp-accent); color: var(--mdpp-accent); background: var(--mdpp-accent-soft); }
+.rootAdders { padding-left: 4px; }
+.dup { outline: 1px solid var(--mdpp-warn); outline-offset: -1px; }
+.readonly { opacity: 0.7; }
+.boolCell { display: flex; align-items: center; height: var(--mdpp-control-h-sm); }
+.provEdit { grid-column: 2 / -1; padding-left: 2px; }

@@ -1,0 +1,3 @@
+.sub { display: flex; flex-direction: column; gap: 1px; }
+.subId { font-family: var(--mdpp-mono); font-size: var(--mdpp-fs-xs); color: var(--mdpp-muted); }
+.actions { display: flex; gap: 4px; justify-content: flex-end; }

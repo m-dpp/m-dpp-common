@@ -1,0 +1,8 @@
+.box { border: 1px dashed var(--mdpp-warn); background: var(--mdpp-warn-bg); border-radius: var(--mdpp-radius); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.label { display: flex; align-items: center; justify-content: space-between; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: #8a5a12; font-weight: 600; }
+.temp { font-weight: 500; text-transform: none; letter-spacing: 0; opacity: 0.85; }
+.who { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.name { font-weight: 600; font-size: var(--mdpp-fs-sm); color: var(--mdpp-text); }
+.org { font-size: var(--mdpp-fs-xs); color: var(--mdpp-text-2); }
+.reason { font-size: var(--mdpp-fs-xs); color: #8a5a12; }
+.roles { display: flex; flex-wrap: wrap; gap: 3px; }

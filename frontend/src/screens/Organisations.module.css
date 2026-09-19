@@ -1,0 +1,11 @@
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.grid.withDetail { grid-template-columns: minmax(0, 1fr) minmax(360px, 0.9fr); }
+@media (max-width: 1100px) { .grid.withDetail { grid-template-columns: 1fr; } }
+.section { display: flex; flex-direction: column; gap: 8px; }
+.sectionTitle { font-size: var(--mdpp-fs-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--mdpp-muted); font-weight: 600; }
+.kv { display: grid; grid-template-columns: 120px 1fr; gap: 6px 12px; font-size: var(--mdpp-fs-sm); align-items: baseline; }
+.k { color: var(--mdpp-muted); }
+.form { display: flex; flex-direction: column; gap: 12px; }
+.two { display: grid; grid-template-columns: 140px 1fr; gap: 8px; align-items: end; }
+.roleRow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.inactive { opacity: 0.6; }
