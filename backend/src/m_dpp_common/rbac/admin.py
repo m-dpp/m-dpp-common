@@ -1,4 +1,5 @@
-"""A parametrised `/admin/rbac` router + dashboard.
+"""A parametrised `/admin/rbac` JSON router. The admin UI lives in the shared
+front-end library (`m-dpp-common/frontend`), never here.
 
 Everything here treats roles and entity types as **data**:
 
@@ -15,11 +16,8 @@ so the grid stays complete (see :mod:`m_dpp_common.rbac.seed`).
 
 import re
 import uuid
-from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
@@ -27,8 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from m_dpp_common.rbac.models import ATTR_ORIGIN_DISCOVERED, ATTR_ORIGIN_MANUAL
 from m_dpp_common.rbac.seed import fan_out_attribute, fan_out_role
-
-_TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 _ROLE_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{1,63}$")
 _ATTR_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\-]{0,127}$")
@@ -176,10 +172,6 @@ def make_rbac_router(
     attr_keys_sql = {et: _attr_keys_sql(model.__tablename__) for et, model in resource_tables.items()}
 
     router = APIRouter(prefix=prefix, tags=["admin-rbac"])
-
-    @router.get("/", response_class=HTMLResponse)
-    async def dashboard(request: Request):
-        return _TEMPLATES.TemplateResponse(request, "rbac_dashboard.html")
 
     @router.get("/entity-types")
     async def list_entity_types():
