@@ -19,9 +19,16 @@ import s from "./UsersAndLinks.module.css";
  * represents exactly one organisation; the organisation's roles are the subject's
  * authority. Subjects are entered by hand until a real identity provider exists.
  */
-export function UsersAndLinks() {
+export interface UsersAndLinksProps {
+  /** The resource type the host's policy uses for subjects and memberships. */
+  resourceType?: string;
+}
+
+export function UsersAndLinks({ resourceType = "subjects" }: UsersAndLinksProps) {
   const api = useApi();
-  const { refresh: refreshPrincipal, principal } = usePrincipal();
+  const { refresh: refreshPrincipal, principal, can } = usePrincipal();
+  const mayCreate = can(resourceType, "create");
+  const mayDelete = can(resourceType, "delete");
   const subjects = useAsync(() => api.listSubjects(), [api]);
   const orgs = useAsync(() => api.listOrganisations(), [api]);
   const roles = useAsync(() => api.listRoles(), [api]);
@@ -55,9 +62,11 @@ export function UsersAndLinks() {
           title="Users & links"
           subtitle={subjects.data ? `${subjects.data.length} subjects` : undefined}
           actions={
-            <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
-              ＋ New subject
-            </Button>
+            mayCreate && (
+              <Button variant="primary" size="sm" onClick={() => setCreating(true)}>
+                ＋ New subject
+              </Button>
+            )
           }
         />
         <CardBody flush>
@@ -97,21 +106,28 @@ export function UsersAndLinks() {
                 key: "actions",
                 header: "",
                 align: "right",
-                render: (x) => (
-                  <div className={s.actions}>
-                    <Button size="sm" onClick={() => setLinking(x)}>
-                      {x.membership ? "Change" : "Link"}
-                    </Button>
-                    {x.membership && (
-                      <Button size="sm" variant="ghost" onClick={() => run(() => api.deleteMembership(x.membership!.id))}>
-                        Unlink
-                      </Button>
-                    )}
-                    <Button size="sm" variant="danger" onClick={() => run(() => api.deleteSubject(x.id))} title="Delete subject">
-                      Delete
-                    </Button>
-                  </div>
-                ),
+                render: (x) =>
+                  mayCreate || mayDelete ? (
+                    <div className={s.actions}>
+                      {mayCreate && (mayDelete || !x.membership) && (
+                        <Button size="sm" onClick={() => setLinking(x)}>
+                          {x.membership ? "Change" : "Link"}
+                        </Button>
+                      )}
+                      {x.membership && mayDelete && (
+                        <Button size="sm" variant="ghost" onClick={() => run(() => api.deleteMembership(x.membership!.id))}>
+                          Unlink
+                        </Button>
+                      )}
+                      {mayDelete && (
+                        <Button size="sm" variant="danger" onClick={() => run(() => api.deleteSubject(x.id))} title="Delete subject">
+                          Delete
+                        </Button>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="mdpp-faint mdpp-xs">read-only</span>
+                  ),
               },
             ]}
           />

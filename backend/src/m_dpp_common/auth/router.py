@@ -12,8 +12,10 @@ mounts it against its own tables — the organisation pattern.
     DELETE /memberships/{id}    unlink
     GET    /me                  the resolved principal + its effective resource permissions
 
-These are development-admin endpoints and are **not** RBAC-gated: an anonymous
-session must be able to list subjects to pick an identity in the switcher.
+``GET /subjects`` and ``GET /me`` stay open: the development "acting as" switcher
+must be able to list identities before one is chosen. Everything else passes the
+resource gate for ``resource_type`` (default ``"subjects"``) when ``rbac_engine``
+is given: memberships GET → list, POST → create, DELETE → delete.
 """
 
 import uuid
@@ -60,10 +62,20 @@ def make_subjects_router(
     resource_permission_model=None,
     resource_types: list[str] | None = None,
     prefix: str = "",
+    rbac_engine=None,
+    resource_type: str = "subjects",
 ) -> APIRouter:
     Subject, Membership, Organisation = subject_model, membership_model, organisation_model
     OrgRole, Role, Res = organisation_role_model, role_model, resource_permission_model
     router = APIRouter(prefix=prefix, tags=["auth"])
+
+    def gate(action: str):
+        async def _dep(db: AsyncSession = Depends(get_db), principal: dict = Depends(get_principal)):
+            if rbac_engine is not None:
+                await rbac_engine.check_resource_permission(principal, action, resource_type, db)
+        return Depends(_dep)
+
+    LIST, CREATE, DELETE = gate("list"), gate("create"), gate("delete")
 
     async def _roles_by_org(org_ids: list[uuid.UUID], db: AsyncSession) -> dict[uuid.UUID, list[str]]:
         if not org_ids:
@@ -120,7 +132,7 @@ def make_subjects_router(
             )
         return out
 
-    @router.post("/subjects", status_code=201)
+    @router.post("/subjects", status_code=201, dependencies=[CREATE])
     async def create_subject(body: SubjectCreate, db: AsyncSession = Depends(get_db)):
         obj = Subject(**body.model_dump())
         db.add(obj)
@@ -132,7 +144,7 @@ def make_subjects_router(
         await db.refresh(obj)
         return {**subject_out(obj), "membership": None, "roles": []}
 
-    @router.delete("/subjects/{subject_id}", status_code=204)
+    @router.delete("/subjects/{subject_id}", status_code=204, dependencies=[DELETE])
     async def delete_subject(subject_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         obj = await db.get(Subject, subject_id)
         if obj is None:
@@ -151,7 +163,7 @@ def make_subjects_router(
             "organisation_name": org.name if org else None,
         }
 
-    @router.get("/memberships")
+    @router.get("/memberships", dependencies=[LIST])
     async def list_memberships(db: AsyncSession = Depends(get_db)):
         memberships = (await db.execute(select(Membership))).scalars().all()
         subjects = {
@@ -166,7 +178,7 @@ def make_subjects_router(
             for m in memberships
         ]
 
-    @router.post("/memberships", status_code=201)
+    @router.post("/memberships", status_code=201, dependencies=[CREATE])
     async def create_membership(body: MembershipCreate, db: AsyncSession = Depends(get_db)):
         subject = await db.get(Subject, body.subject_id)
         if subject is None:
@@ -187,7 +199,7 @@ def make_subjects_router(
         await db.refresh(obj)
         return _membership_out(obj, subject, org)
 
-    @router.delete("/memberships/{membership_id}", status_code=204)
+    @router.delete("/memberships/{membership_id}", status_code=204, dependencies=[DELETE])
     async def delete_membership(membership_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         obj = await db.get(Membership, membership_id)
         if obj is None:

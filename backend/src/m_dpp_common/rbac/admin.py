@@ -12,6 +12,13 @@ Everything here treats roles and entity types as **data**:
 
 Creating a role or registering an attribute fans out the missing permission rows
 so the grid stays complete (see :mod:`m_dpp_common.rbac.seed`).
+
+**Gating.** When ``get_principal`` and ``rbac_engine`` are given, every endpoint
+except the reference reads (``/entity-types``, ``/roles``, ``/organisation-roles``
+GET) passes the resource gate for ``resource_type`` (default ``"rbac"``): GET →
+read, POST → create, PATCH → update, DELETE → delete. Without them the router is
+open (the pre-0.10 behaviour) — a service should seed a policy for ``"rbac"`` and
+pass both.
 """
 
 import re
@@ -154,6 +161,9 @@ def make_rbac_router(
     resource_types: list[str] | None = None,
     organisation_model=None,
     prefix: str = "/admin/rbac",
+    get_principal=None,
+    rbac_engine=None,
+    resource_type: str = "rbac",
 ) -> APIRouter:
     """
     resource_tables: entity_type → ORM model whose ``attrs`` bag is scanned by sync;
@@ -173,6 +183,19 @@ def make_rbac_router(
 
     router = APIRouter(prefix=prefix, tags=["admin-rbac"])
 
+    if get_principal is not None and rbac_engine is not None:
+        def gate(action: str):
+            async def _dep(db: AsyncSession = Depends(get_db), principal: dict = Depends(get_principal)):
+                await rbac_engine.check_resource_permission(principal, action, resource_type, db)
+            return Depends(_dep)
+    else:
+        def gate(action: str):  # noqa: ARG001 — open router (no principal source given)
+            async def _noop():
+                return None
+            return Depends(_noop)
+
+    READ, CREATE, UPDATE, DELETE = gate("read"), gate("create"), gate("update"), gate("delete")
+
     @router.get("/entity-types")
     async def list_entity_types():
         return entity_types
@@ -184,7 +207,7 @@ def make_rbac_router(
         result = await db.execute(select(Role).order_by(Role.sort_order, Role.name))
         return [_role_out(r) for r in result.scalars().all()]
 
-    @router.post("/roles", status_code=201)
+    @router.post("/roles", status_code=201, dependencies=[CREATE])
     async def create_role(body: RoleCreate, db: AsyncSession = Depends(get_db)):
         if (await db.execute(select(Role).where(Role.name == body.name))).scalar_one_or_none():
             raise HTTPException(status_code=409, detail="Role already exists")
@@ -210,7 +233,7 @@ def make_rbac_router(
         await db.refresh(role)
         return {**_role_out(role), "fanned_out": fanned}
 
-    @router.patch("/roles/{name}")
+    @router.patch("/roles/{name}", dependencies=[UPDATE])
     async def update_role(name: str, body: RoleUpdate, db: AsyncSession = Depends(get_db)):
         role = (await db.execute(select(Role).where(Role.name == name))).scalar_one_or_none()
         if role is None:
@@ -223,7 +246,7 @@ def make_rbac_router(
 
     # ----------------------------------------------------------- attributes
 
-    @router.get("/attributes")
+    @router.get("/attributes", dependencies=[READ])
     async def list_attributes(entity_type: str | None = None, db: AsyncSession = Depends(get_db)):
         q = select(RbacAttribute)
         if entity_type:
@@ -231,7 +254,7 @@ def make_rbac_router(
         result = await db.execute(q.order_by(RbacAttribute.entity_type, RbacAttribute.attr_key))
         return [_attribute_out(a) for a in result.scalars().all()]
 
-    @router.post("/attributes", status_code=201)
+    @router.post("/attributes", status_code=201, dependencies=[CREATE])
     async def create_attribute(body: AttributeCreate, db: AsyncSession = Depends(get_db)):
         if body.entity_type not in entity_types:
             raise HTTPException(
@@ -266,7 +289,7 @@ def make_rbac_router(
         await db.refresh(attr)
         return {**_attribute_out(attr), "permission_rows": inserted}
 
-    @router.delete("/attributes/{attribute_id}", status_code=204)
+    @router.delete("/attributes/{attribute_id}", status_code=204, dependencies=[DELETE])
     async def delete_attribute(attribute_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
         attr = (
             await db.execute(select(RbacAttribute).where(RbacAttribute.id == attribute_id))
@@ -282,7 +305,7 @@ def make_rbac_router(
         await db.delete(attr)
         await db.commit()
 
-    @router.post("/sync-attrs")
+    @router.post("/sync-attrs", dependencies=[CREATE])
     async def sync_attrs(db: AsyncSession = Depends(get_db)):
         """Discover attribute keys from stored data, register the new ones, and fan
         out permission rows. Never deletes — manual registrations are untouched."""
@@ -321,7 +344,7 @@ def make_rbac_router(
 
     # ------------------------------------------------- attribute permissions
 
-    @router.get("/permissions")
+    @router.get("/permissions", dependencies=[READ])
     async def list_permissions(entity_type: str | None = None, db: AsyncSession = Depends(get_db)):
         q = select(AttrPermission)
         if entity_type:
@@ -331,7 +354,7 @@ def make_rbac_router(
         )
         return [_perm_out(p) for p in result.scalars().all()]
 
-    @router.patch("/permissions/{permission_id}")
+    @router.patch("/permissions/{permission_id}", dependencies=[UPDATE])
     async def update_permission(
         permission_id: uuid.UUID,
         body: AttrPermissionUpdate,
@@ -352,7 +375,7 @@ def make_rbac_router(
 
     # -------------------------------------------------- resource permissions
 
-    @router.get("/resource-permissions")
+    @router.get("/resource-permissions", dependencies=[READ])
     async def list_resource_permissions(
         resource_type: str | None = None, db: AsyncSession = Depends(get_db)
     ):
@@ -364,7 +387,7 @@ def make_rbac_router(
         )
         return [_res_perm_out(p) for p in result.scalars().all()]
 
-    @router.patch("/resource-permissions/{permission_id}")
+    @router.patch("/resource-permissions/{permission_id}", dependencies=[UPDATE])
     async def update_resource_permission(
         permission_id: uuid.UUID,
         body: ResourcePermissionUpdate,
@@ -416,7 +439,7 @@ def make_rbac_router(
             for a in assignments
         ]
 
-    @router.post("/organisation-roles", status_code=201)
+    @router.post("/organisation-roles", status_code=201, dependencies=[CREATE])
     async def create_organisation_role(
         body: OrganisationRoleCreate, db: AsyncSession = Depends(get_db)
     ):
@@ -440,7 +463,7 @@ def make_rbac_router(
             "role_name": obj.role_name,
         }
 
-    @router.delete("/organisation-roles/{assignment_id}", status_code=204)
+    @router.delete("/organisation-roles/{assignment_id}", status_code=204, dependencies=[DELETE])
     async def delete_organisation_role(
         assignment_id: uuid.UUID, db: AsyncSession = Depends(get_db)
     ):

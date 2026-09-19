@@ -38,11 +38,13 @@ export function organisationIdentifier(org: Organisation): { scheme: Scheme; val
 export interface OrganisationsProps {
   /** The resource type name the host's RBAC policy uses for organisations. */
   resourceType?: string;
+  /** Assigning roles to an organisation changes authority, so it is gated on this type. */
+  rolesResourceType?: string;
   /** Preselect an organisation. */
   initialSelectedId?: string | null;
 }
 
-export function Organisations({ resourceType = "organisations", initialSelectedId = null }: OrganisationsProps) {
+export function Organisations({ resourceType = "organisations", rolesResourceType = "rbac", initialSelectedId = null }: OrganisationsProps) {
   const api = useApi();
   const { can, refresh: refreshPrincipal } = usePrincipal();
   const orgs = useAsync(() => api.listOrganisations({ includeRemoved: true }), [api]);
@@ -142,6 +144,7 @@ export function Organisations({ resourceType = "organisations", initialSelectedI
           linkedUsers={linkedUsers(selected.id)}
           canUpdate={can(resourceType, "update")}
           canDelete={can(resourceType, "delete")}
+          canAssignRoles={can(rolesResourceType, "create") && can(rolesResourceType, "delete")}
           onClose={() => setSelectedId(null)}
           onChanged={reloadAll}
         />
@@ -169,11 +172,12 @@ interface DetailProps {
   linkedUsers: number;
   canUpdate: boolean;
   canDelete: boolean;
+  canAssignRoles: boolean;
   onClose: () => void;
   onChanged: () => Promise<void>;
 }
 
-function OrganisationDetail({ org, roles, assignments, linkedUsers, canUpdate, canDelete, onClose, onChanged }: DetailProps) {
+function OrganisationDetail({ org, roles, assignments, linkedUsers, canUpdate, canDelete, canAssignRoles, onClose, onChanged }: DetailProps) {
   const api = useApi();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(org.name);
@@ -298,11 +302,11 @@ function OrganisationDetail({ org, roles, assignments, linkedUsers, canUpdate, c
           <div className={s.roleRow}>
             {held.length === 0 && <span className="mdpp-faint">No roles — subjects representing this organisation resolve to the anonymous role.</span>}
             {assignments.map((a) => (
-              <Tag key={a.id} onRemove={canUpdate && editing ? () => run(() => api.removeOrganisationRole(a.id)) : undefined} removeLabel={`Remove role ${a.role_name}`}>
+              <Tag key={a.id} onRemove={canAssignRoles && editing ? () => run(() => api.removeOrganisationRole(a.id)) : undefined} removeLabel={`Remove role ${a.role_name}`}>
                 {roles.find((r) => r.name === a.role_name)?.label ?? a.role_name}
               </Tag>
             ))}
-            {canUpdate && editing && addable.length > 0 && (
+            {canAssignRoles && editing && addable.length > 0 && (
               <span className="mdpp-row">
                 <Select size_="sm" value={roleToAdd} onChange={(e) => setRoleToAdd(e.target.value)} placeholder="Add role…" options={addable.map((r) => ({ value: r.name, label: r.label }))} />
                 <Button size="sm" disabled={!roleToAdd || busy} onClick={() => run(() => api.addOrganisationRole(org.id, roleToAdd)).then(() => setRoleToAdd(""))}>
@@ -311,7 +315,8 @@ function OrganisationDetail({ org, roles, assignments, linkedUsers, canUpdate, c
               </span>
             )}
           </div>
-          {editing && <span className="mdpp-xs mdpp-muted">Role changes apply immediately; they define what subjects of this organisation may do.</span>}
+          {editing && canAssignRoles && <span className="mdpp-xs mdpp-muted">Role changes apply immediately; they define what subjects of this organisation may do.</span>}
+          {editing && !canAssignRoles && <span className="mdpp-xs mdpp-muted">Only an administrator can change an organisation's roles.</span>}
         </div>
 
         <div className={s.section}>
