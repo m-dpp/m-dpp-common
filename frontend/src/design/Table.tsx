@@ -50,9 +50,12 @@ export interface DataTableProps<T> extends Omit<TableProps, "children"> {
   onRowClick?: (row: T) => void;
   selectedKey?: string | null;
   empty?: ReactNode;
+  /** Per-row class — for rows that are present but no longer count, such as a
+   *  withdrawn record kept for the audit trail. */
+  rowClassName?: (row: T) => string | undefined;
 }
 
-export function DataTable<T>({ columns, rows, rowKey, onRowClick, selectedKey, empty, ...table }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, onRowClick, selectedKey, empty, rowClassName, ...table }: DataTableProps<T>) {
   return (
     <Table clickable={!!onRowClick} {...table}>
       <thead>
@@ -73,7 +76,11 @@ export function DataTable<T>({ columns, rows, rowKey, onRowClick, selectedKey, e
           rows.map((r) => {
             const k = rowKey(r);
             return (
-              <tr key={k} className={selectedKey === k ? s.selected : undefined} onClick={onRowClick ? () => onRowClick(r) : undefined}>
+              <tr
+                key={k}
+                className={[selectedKey === k ? s.selected : "", rowClassName?.(r) ?? ""].filter(Boolean).join(" ") || undefined}
+                onClick={onRowClick ? () => onRowClick(r) : undefined}
+              >
                 {columns.map((c) => (
                   <td key={c.key} className={c.align === "right" ? s.right : c.align === "center" ? s.center : undefined}>
                     {c.render(r)}

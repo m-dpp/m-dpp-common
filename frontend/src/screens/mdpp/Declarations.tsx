@@ -36,7 +36,10 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
   const [prefix, setPrefix] = useState("");
   const [level, setLevel] = useState<Gs1Level | "">("");
   const [declaredBy, setDeclaredBy] = useState("");
-  const [currentOnly, setCurrentOnly] = useState(true);
+  type Versions = "current" | "all" | "withdrawn";
+  const [versions, setVersions] = useState<Versions>("current");
+  const currentOnly = versions === "current";
+  const includeWithdrawn = versions === "withdrawn";
 
   // Organisations that declare, as MDPP knows them — `declared_by` is an id in
   // mdpp's table, so the host app's list would filter on ids that do not exist here.
@@ -55,6 +58,8 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
   }, [actingOrgId, declares]);
   const [selected, setSelected] = useState<string | null>(pathScope);
   const [creating, setCreating] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const effectivePrefix = pathScope ?? prefix;
   const list = useAsync(
@@ -64,12 +69,27 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
         level: pathScope ? "" : level,
         declaredBy: pathScope ? undefined : declaredBy || undefined,
         currentOnly: pathScope ? false : currentOnly,
+        includeWithdrawn: pathScope ? true : includeWithdrawn,
       }),
-    [mdpp, effectivePrefix, level, declaredBy, currentOnly, pathScope],
+    [mdpp, effectivePrefix, level, declaredBy, currentOnly, includeWithdrawn, pathScope],
   );
 
   const items = list.data?.items ?? [];
   const mayCreate = can(resourceType, "create");
+  const mayWithdraw = can(resourceType, "delete");
+
+  async function withdraw(d: DeclarationListItem) {
+    setBusy(d.id);
+    setActionError(null);
+    try {
+      await mdpp.withdrawDeclarationVersion(d.gs1_path, d.version);
+      await list.reload();
+    } catch (e) {
+      setActionError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  }
 
   const columns: Column<DeclarationListItem>[] = useMemo(
     () => [
@@ -117,6 +137,27 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
         ),
       },
       {
+        key: "actions",
+        header: "",
+        align: "right" as const,
+        render: (d: DeclarationListItem) =>
+          mayWithdraw && !d.withdrawn_at ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={busy === d.id}
+              title={
+                d.is_current
+                  ? "Withdraw this version — the previous one becomes current again"
+                  : "Withdraw this version"
+              }
+              onClick={() => void withdraw(d)}
+            >
+              {busy === d.id ? "Withdrawing…" : "Withdraw"}
+            </Button>
+          ) : null,
+      },
+      {
         key: "by",
         header: "Declared by",
         render: (d) => (
@@ -130,7 +171,7 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
         ),
       },
     ],
-    [pathScope],
+    [pathScope, mayWithdraw, busy],
   );
 
   return (
@@ -176,16 +217,13 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
                   <option key={o.id} value={o.id}>{o.name}</option>
                 ))}
               </LabelledSelect>
-              <LabelledSelect
-                label="Versions"
-                value={currentOnly ? "current" : "all"}
-                onChange={(e) => setCurrentOnly(e.target.value === "current")}
-              >
+              <LabelledSelect label="Versions" value={versions} onChange={(e) => setVersions(e.target.value as Versions)}>
                 <option value="current">Current only</option>
                 <option value="all">All versions</option>
+                <option value="withdrawn">All, including withdrawn</option>
               </LabelledSelect>
               {(prefix || level || declaredBy || !currentOnly) && (
-                <Button size="sm" variant="ghost" onClick={() => { setPrefix(""); setLevel(""); setDeclaredBy(""); setCurrentOnly(true); }}>
+                <Button size="sm" variant="ghost" onClick={() => { setPrefix(""); setLevel(""); setDeclaredBy(""); setVersions("current"); }}>
                   Clear filters
                 </Button>
               )}
@@ -195,6 +233,7 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
       </Card>
 
       {list.error && <Notice tone="error">{list.error}</Notice>}
+      {actionError && <Notice tone="error">{actionError}</Notice>}
 
       <Card>
         <CardBody>
@@ -202,6 +241,7 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
             columns={columns}
             rows={items}
             rowKey={(d) => d.id}
+            rowClassName={(d) => (d.withdrawn_at ? s.withdrawnRow : undefined)}
             selectedKey={selected}
             onRowClick={pathScope ? undefined : (d) => setSelected(d.gs1_path)}
             empty={
