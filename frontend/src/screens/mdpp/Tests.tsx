@@ -1,5 +1,4 @@
-import { Fragment, useMemo, useState } from "react";
-import { useApi } from "../../api/context";
+import { Fragment, useState } from "react";
 import { usePrincipal } from "../../api/principal";
 import { Comparison } from "../../components/Comparison/Comparison";
 import { Button } from "../../design/Button";
@@ -11,6 +10,7 @@ import { Modal } from "../../design/Modal";
 import { Notice } from "../../design/Notice";
 import { Table } from "../../design/Table";
 import { errorMessage, useAsync } from "../../hooks/useAsync";
+import { useOrganisationsWithRole } from "../../hooks/useOrganisationsWithRole";
 import { useMdpp } from "../../mdpp/context";
 import type { AnalysisType, ComparisonResponse, Gs1Level, TestListItem, TestStatus } from "../../mdpp/types";
 import s from "./mdpp.module.css";
@@ -48,7 +48,6 @@ export interface TestsProps {
  */
 export function Tests({ pathScope = null, resourceType = "tests", bare = false, comparisonNote }: TestsProps) {
   const mdpp = useMdpp();
-  const api = useApi();
   const { can } = usePrincipal();
 
   const [prefix, setPrefix] = useState("");
@@ -75,13 +74,12 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
       }),
     [mdpp, effectivePrefix, level, status, lab, analysisType, sort, pathScope],
   );
-  // labs are organisations with the laboratory role — the filter needs their names
-  const orgs = useAsync(() => api.listOrganisations(), [api]);
+  // Only organisations holding `laboratory`: a test names the lab that ran it,
+  // and the backend refuses any other, so offering one is offering a 422.
+  const { organisations: labs } = useOrganisationsWithRole("laboratory");
 
   const items = list.data?.items ?? [];
   const mayWrite = can(resourceType, "create");
-
-  const labs = useMemo(() => (orgs.data ?? []).filter((o) => !o.removed_at), [orgs.data]);
 
   const refresh = async (t: TestListItem) => {
     setBusy(t.id);
@@ -330,12 +328,9 @@ export interface RegisterTestProps {
  * them per level) mounts this instead of a second copy of the table.
  */
 export function RegisterTest({ gs1Path, onRegistered, label = "Register test here", resourceType = "tests" }: RegisterTestProps) {
-  const api = useApi();
   const { can } = usePrincipal();
   const [open, setOpen] = useState(false);
-  const orgs = useAsync(() => api.listOrganisations(), [api]);
-  const labs = useMemo(() => (orgs.data ?? []).filter((o) => !o.removed_at), [orgs.data]);
-
+  const { organisations: labs } = useOrganisationsWithRole("laboratory");
   if (!can(resourceType, "create")) return null;
   return (
     <>

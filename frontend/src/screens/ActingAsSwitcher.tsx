@@ -78,7 +78,9 @@ export function ActingAsSwitcher({ roles }: ActingAsSwitcherProps) {
           >
             <option value="">— choose an organisation —</option>
             {(principal?.organisations ?? []).map((o) => (
-              <option key={o.id} value={o.id}>
+              // prefer the cross-service key: this value is sent to EVERY API the
+              // app talks to, and an id from one service is meaningless to another
+              <option key={o.id} value={o.key ?? o.id}>
                 {o.name}
                 {o.is_org_admin ? "  (admin)" : ""}
               </option>

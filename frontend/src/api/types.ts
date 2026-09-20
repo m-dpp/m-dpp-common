@@ -95,13 +95,15 @@ export interface Principal {
   anonymous: boolean;
   reason: string | null;
   subject: { id: string; sub: string; email: string | null; display_name: string | null } | null;
-  /** The organisation currently being acted for. */
-  organisation: { id: string; name: string } | null;
+  /** The organisation currently being acted for. `key` is the cross-service
+   *  name — each app issues its own ids, so only the key means the same thing
+   *  to both. */
+  organisation: { id: string; key: string | null; name: string } | null;
   /** …and whether this membership may administer it. */
   is_org_admin: boolean;
   /** Every organisation this subject may act for. Offered as choices; confers
    *  nothing by itself. */
-  organisations: { id: string; name: string; is_org_admin: boolean }[];
+  organisations: { id: string; key: string | null; name: string; is_org_admin: boolean }[];
   roles: string[];
   /** @deprecated compat: roles[0] */
   role: string;

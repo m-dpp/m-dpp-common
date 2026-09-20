@@ -138,17 +138,29 @@ async def resolve_principal(
         if o is None or getattr(o, "removed_at", None) is not None:
             continue
         orgs_by_id[str(o.id)] = (o, m)
-        choices.append({"id": str(o.id), "name": o.name, "is_org_admin": bool(m.is_org_admin)})
+        key = getattr(o, "external_key", None)
+        if key:
+            # selectable by the cross-service key as well as this app's own id
+            orgs_by_id[key] = (o, m)
+        choices.append({
+            "id": str(o.id),
+            "key": key,
+            "name": o.name,
+            "is_org_admin": bool(m.is_org_admin),
+        })
     if not choices:
         return _fallback(
             sub, anon, "linked organisation is missing or removed",
             subject=subject_out(subject),
         )
 
-    # Pick the ONE organisation being acted as. An explicit choice must be one
-    # the subject actually holds a membership for — otherwise it is refused
-    # rather than quietly falling back to another, which would silently write on
-    # behalf of an organisation the caller did not name.
+    # Pick the ONE organisation being acted as. The choice may be this app's own
+    # id OR the cross-service `external_key`: a front-end talking to two services
+    # has to name the same organisation to both, and the ids differ per app.
+    #
+    # It must be one the subject actually holds a membership for — otherwise it
+    # is refused rather than quietly falling back to another, which would
+    # silently write on behalf of an organisation the caller did not name.
     if acting_organisation is not None:
         picked = orgs_by_id.get(str(acting_organisation))
         if picked is None:
@@ -180,7 +192,11 @@ async def resolve_principal(
         "anonymous": False,
         "reason": reason,
         "subject": subject_out(subject),
-        "organisation": {"id": str(org.id), "name": org.name},
+        "organisation": {
+            "id": str(org.id),
+            "key": getattr(org, "external_key", None),
+            "name": org.name,
+        },
         "is_org_admin": bool(membership.is_org_admin),
         "organisations": choices,
         "roles": roles,

@@ -164,6 +164,18 @@ entity-agnostic.
   and an unrecognised value falls back to the permissive default so a config typo cannot silently
   hide data.
 - This resolves the open question "one organisation per user, or several": several.
+- 2026-09-20 (0.11.0): `Organisation.external_key` — a stable name for the SAME organisation across
+  services. Each app owns its own table and issues its own UUIDs, so an id means nothing outside the
+  app that issued it; until now only the subject's `sub` crossed the boundary, which says WHO a user
+  is but not WHICH organisation they act for. A front-end talking to two services (dpp-app's
+  Molecular tab) must name one organisation to both, and a UUID cannot. `resolve_principal` accepts
+  either the app's own id or the key. It is NOT an RBAC key and not an identifier of record —
+  everything still keys on `id` internally, GLN stays optional in `attrs` — and it is nullable,
+  because an organisation existing in one service only needs none.
+- 2026-09-20 (0.11.0): `requestJson` defaults BOTH the identity and the acting organisation to the
+  shared store. An app-specific client that passed only the identity left a multi-membership user
+  unresolved, and the 403 blamed the role ("Role(s) public not permitted") on a user who plainly
+  held it. The resource gate now appends the principal's own reason when it is anonymous.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions

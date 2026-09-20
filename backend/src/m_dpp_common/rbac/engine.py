@@ -123,10 +123,19 @@ class RbacEngine:
                 for role in roles
             )
         if not allowed:
-            raise HTTPException(
-                status_code=403,
-                detail=f"Role(s) {', '.join(roles)} not permitted to {action} {resource_type}",
-            )
+            # Blaming the role is misleading when the role is only `public`
+            # because the identity never resolved. "Role(s) public not permitted"
+            # reads as a permissions problem to someone who plainly holds the
+            # role — the actual fix is usually to choose an organisation, or to
+            # link the subject in this app. The principal already knows why it
+            # fell back; say so.
+            detail = f"Role(s) {', '.join(roles)} not permitted to {action} {resource_type}"
+            if principal.get("anonymous") and principal.get("reason"):
+                detail += f" — {principal['reason']}"
+                if principal.get("organisations"):
+                    names = ", ".join(o.get("name", "?") for o in principal["organisations"])
+                    detail += f" (you may act for: {names})"
+            raise HTTPException(status_code=403, detail=detail)
 
     # ------------------------------------------------------ attribute filter
 

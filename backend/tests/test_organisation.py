@@ -44,7 +44,17 @@ def _router(**kwargs):
 def test_mixin_binds_expected_table_and_columns():
     assert Organisation.__tablename__ == "organisations"
     cols = set(Organisation.__table__.columns.keys())
-    assert cols == {"id", "name", "attrs", "created_at", "updated_at", "removed_at"}
+    assert cols == {"id", "name", "external_key", "attrs", "created_at", "updated_at", "removed_at"}
+
+
+def test_external_key_is_a_correspondence_name_not_an_identifier():
+    """It names the SAME organisation across services, because each app issues
+    its own UUIDs. It is not an RBAC key and not an identifier of record —
+    internally everything still keys on `id` — so it is nullable: an
+    organisation that exists in one service only needs no key."""
+    col = Organisation.__table__.columns["external_key"]
+    assert col.nullable
+    assert col.index
 
 
 def test_gln_is_not_a_column():

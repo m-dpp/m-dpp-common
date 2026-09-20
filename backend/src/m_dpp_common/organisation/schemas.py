@@ -43,11 +43,16 @@ class _GlnNormalising(BaseModel):
 
 class OrganisationCreate(_GlnNormalising):
     name: str
+    #: Stable name for the SAME organisation across services — each app issues
+    #: its own UUIDs, so only this can be spoken to both. Optional: an
+    #: organisation that exists in one service only needs none.
+    external_key: str | None = None
     attrs: dict[str, Any] | None = None
 
 
 class OrganisationUpdate(_GlnNormalising):
     name: str | None = None
+    external_key: str | None = None
     # Not Optional: an explicit null must fail validation rather than mean "clear".
     attrs: dict[str, Any] = Field(default_factory=dict)
     # Soft-delete toggle: `false` sets removed_at, `true` clears it (reactivate).

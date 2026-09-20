@@ -1,3 +1,4 @@
+import { identityStore } from "./identity";
 import type {
   AttrPermission,
   Membership,
@@ -89,12 +90,17 @@ export async function requestJson<T>(
   const f = opts.fetchImpl ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
   const headers: Record<string, string> = { Accept: "application/json" };
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
-  const identity = opts.getIdentity?.();
+  // Both default to the shared store. An app-specific client that passed only
+  // the identity used to leave a multi-membership user unresolved, and the
+  // backend — refusing to guess which organisation was meant — fell back to the
+  // anonymous role. The symptom was a baffling "role public not permitted" on a
+  // user who plainly had the role. Pass `() => null` to opt out explicitly.
+  const identity = (opts.getIdentity ?? identityStore.get)();
   if (identity) headers[opts.identityHeader ?? DEFAULT_IDENTITY_HEADER] = identity;
   // Sent separately from the identity on purpose: who you are is proved, which
   // organisation you act under is chosen. The backend refuses a choice the
   // subject holds no membership for, so this header grants nothing by itself.
-  const actingOrg = opts.getActingOrganisation?.();
+  const actingOrg = (opts.getActingOrganisation ?? identityStore.getOrganisation)();
   if (actingOrg) headers[opts.actingOrganisationHeader ?? DEFAULT_ACTING_ORG_HEADER] = actingOrg;
   const res = await f(url, { method, headers, body: opts.body === undefined ? undefined : JSON.stringify(opts.body) });
   if (res.status === 204) return undefined as T;

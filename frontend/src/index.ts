@@ -8,5 +8,6 @@ export * from "./components/RoleChips";
 export * from "./api";
 export * from "./mdpp";
 export * from "./hooks/useAsync";
+export * from "./hooks/useOrganisationsWithRole";
 export * from "./screens";
 export * from "./screens/mdpp";

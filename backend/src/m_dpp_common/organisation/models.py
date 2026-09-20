@@ -43,3 +43,19 @@ class OrganisationMixin(EntityMixin):
         )
 
     name: Mapped[str] = mapped_column(String, nullable=False)
+
+    # A stable key for the SAME organisation across services.
+    #
+    # Each app owns its own `organisations` table with its own UUIDs, so an id
+    # means nothing outside the app that issued it. Until now the only thing
+    # that crossed the boundary was the subject's `sub` — which is enough to say
+    # *who* a user is, but not *which organisation* they are acting for. A
+    # front-end talking to two services (dpp-app's Molecular tab) has to name the
+    # same organisation to both, and a UUID cannot do that.
+    #
+    # It is NOT an RBAC key and not an identifier of record: internally
+    # everything still keys on `id`, and a GLN stays optional in `attrs`. This is
+    # purely a correspondence name, chosen by whoever seeds the deployment, and
+    # nullable because an organisation that exists in one service only does not
+    # need one.
+    external_key: Mapped[str | None] = mapped_column(String, nullable=True, index=True)

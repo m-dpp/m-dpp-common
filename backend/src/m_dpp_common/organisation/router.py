@@ -60,6 +60,8 @@ def make_organisation_router(
             "@type": "schema:Organization",
             "id": str(org.id),
             "name": org.name,
+            # getattr: a consumer binding an older table still serialises
+            "external_key": getattr(org, "external_key", None),
             "attrs": attrs if attrs is not None else org.attrs,
             "created_at": org.created_at.isoformat(),
             "updated_at": org.updated_at.isoformat(),

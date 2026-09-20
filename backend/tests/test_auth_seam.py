@@ -138,10 +138,10 @@ def _resolve(sub, db, **kw):
 
 
 SUBJECT = SimpleNamespace(id=uuid.uuid4(), sub="alice", email="a@x", display_name="Alice")
-ORG = SimpleNamespace(id=uuid.uuid4(), name="Byborre", removed_at=None)
+ORG = SimpleNamespace(id=uuid.uuid4(), name="Byborre", removed_at=None, external_key="byborre")
 MEMBERSHIP = SimpleNamespace(id=uuid.uuid4(), subject_id=SUBJECT.id, organisation_id=ORG.id, is_org_admin=False)
 
-ORG2 = SimpleNamespace(id=uuid.uuid4(), name="New Order of Fashion", removed_at=None)
+ORG2 = SimpleNamespace(id=uuid.uuid4(), name="New Order of Fashion", removed_at=None, external_key="noof")
 MEMBERSHIP2 = SimpleNamespace(
     id=uuid.uuid4(), subject_id=SUBJECT.id, organisation_id=ORG2.id, is_org_admin=True
 )
@@ -178,7 +178,7 @@ async def test_linked_subject_gets_the_organisations_roles():
     db = FakeDb([SUBJECT, [MEMBERSHIP], [("economic_operator",), ("laboratory",)]], rows={ORG.id: ORG})
     p = await _resolve("alice", db)
     assert p["anonymous"] is False and p["reason"] is None
-    assert p["organisation"] == {"id": str(ORG.id), "name": "Byborre"}
+    assert p["organisation"] == {"id": str(ORG.id), "key": "byborre", "name": "Byborre"}
     assert p["roles"] == ["economic_operator", "laboratory"]
     assert p["role"] == "economic_operator"  # compat: first role
     assert principal_roles(p) == ["economic_operator", "laboratory"]
@@ -376,7 +376,7 @@ async def test_choosing_an_organisation_selects_that_memberships_authority():
         rows={ORG.id: ORG, ORG2.id: ORG2},
     )
     p = await _resolve("alice", db, acting_organisation=str(ORG2.id))
-    assert p["organisation"] == {"id": str(ORG2.id), "name": "New Order of Fashion"}
+    assert p["organisation"] == {"id": str(ORG2.id), "key": "noof", "name": "New Order of Fashion"}
     assert p["roles"] == ["economic_operator"]
     assert p["is_org_admin"] is True          # from THAT membership
 
@@ -408,10 +408,29 @@ async def test_acting_as_an_organisation_you_do_not_belong_to_is_refused():
 
 
 async def test_removed_organisations_are_not_offered_or_acted_as():
-    removed = SimpleNamespace(id=ORG2.id, name="Gone", removed_at="2026-01-01")
+    removed = SimpleNamespace(id=ORG2.id, name="Gone", removed_at="2026-01-01", external_key="gone")
     db = FakeDb([SUBJECT, [MEMBERSHIP, MEMBERSHIP2], [("economic_operator",)]],
                 rows={ORG.id: ORG, ORG2.id: removed})
     p = await _resolve("alice", db)
     # only one live membership remains, so no choice is needed
     assert p["anonymous"] is False
     assert [o["name"] for o in p["organisations"]] == ["Byborre"]
+
+
+async def test_an_organisation_can_be_chosen_by_its_cross_service_key():
+    """Each app issues its own UUIDs, so a front-end talking to two services
+    cannot name the same organisation to both with an id. The key can."""
+    db = FakeDb(
+        [SUBJECT, [MEMBERSHIP, MEMBERSHIP2], [("economic_operator",)]],
+        rows={ORG.id: ORG, ORG2.id: ORG2},
+    )
+    p = await _resolve("alice", db, acting_organisation="noof")
+    assert p["organisation"]["name"] == "New Order of Fashion"
+    assert p["organisation"]["key"] == "noof"
+
+
+async def test_a_key_you_hold_no_membership_for_is_still_refused():
+    db = FakeDb([SUBJECT, [MEMBERSHIP]], rows={ORG.id: ORG})
+    p = await _resolve("alice", db, acting_organisation="someone-else")
+    assert p["anonymous"] is True
+    assert "not a member" in p["reason"]

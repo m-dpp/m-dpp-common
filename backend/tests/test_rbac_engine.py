@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy.orm import DeclarativeBase
 
 from m_dpp_common.rbac import AttrPermissionMixin, RbacEngine, ResourcePermissionMixin, RoleMixin
@@ -168,3 +169,32 @@ async def test_for_entity_binds_assert_writable():
         await bound.assert_writable_attrs({"locked": 1}, "public", _db(denied_keys=["locked"]))
     assert exc.value.status_code == 403
     assert "fibre_nodes" in exc.value.detail
+
+
+# ── a 403 should name the real cause, not just the fallback role ───────────
+
+async def test_denial_explains_an_unresolved_identity():
+    """"Role(s) public not permitted" reads as a permissions problem to someone
+    who plainly holds the role. When `public` is only the fallback, the message
+    says why it fell back and what to do about it."""
+    principal = {
+        "roles": ["public"],
+        "anonymous": True,
+        "reason": "several organisations available — choose one to act as",
+        "organisations": [{"id": "1", "name": "Byborre"}, {"id": "2", "name": "Candour"}],
+    }
+    db = _db(rows=[SimpleNamespace(role_name="public", resource_type="products", can_create=False)])
+    with pytest.raises(HTTPException) as ei:
+        await _engine(with_roles=False).check_resource_permission(principal, "create", "products", db)
+    detail = ei.value.detail
+    assert "choose one to act as" in detail
+    assert "Byborre" in detail and "Candour" in detail
+
+
+async def test_denial_of_a_resolved_role_stays_plain():
+    """A real permissions refusal must not be dressed up as an identity problem."""
+    principal = {"roles": ["recycler"], "anonymous": False, "reason": None}
+    db = _db(rows=[SimpleNamespace(role_name="recycler", resource_type="products", can_create=False)])
+    with pytest.raises(HTTPException) as ei:
+        await _engine(with_roles=False).check_resource_permission(principal, "create", "products", db)
+    assert ei.value.detail == "Role(s) recycler not permitted to create products"
