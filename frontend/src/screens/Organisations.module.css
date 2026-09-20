@@ -9,3 +9,4 @@
 .two { display: grid; grid-template-columns: 140px 1fr; gap: 8px; align-items: end; }
 .roleRow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .inactive { opacity: 0.6; }
+.sharedKey { font-family: var(--mdpp-mono); font-size: var(--mdpp-fs-xs); color: var(--mdpp-text-2); }

@@ -3,6 +3,11 @@
 export interface Organisation {
   id: string;
   name: string;
+  /** The same organisation's name in the OTHER services. Each app issues its
+   *  own `id`, so this is the only value that means anything across them — it
+   *  is what `X-Acting-Org` carries. Null for an organisation that exists in
+   *  one service alone. */
+  external_key: string | null;
   attrs: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
@@ -11,6 +16,7 @@ export interface Organisation {
 }
 
 export interface OrganisationCreate {
+  external_key?: string | null;
   name: string;
   attrs?: Record<string, unknown> | null;
 }

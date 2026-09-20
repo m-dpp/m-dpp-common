@@ -103,6 +103,18 @@ export function Organisations({ resourceType = "organisations", rolesResourceTyp
                   </span>
                 ),
               },
+              {
+                key: "shared_key",
+                header: "Shared key",
+                render: (o) =>
+                  o.external_key ? (
+                    <code className={s.sharedKey} title="Identifies this organisation across services">
+                      {o.external_key}
+                    </code>
+                  ) : (
+                    <span className="mdpp-faint mdpp-xs">this service only</span>
+                  ),
+              },
               { key: "roles", header: "Roles", render: (o) => <RoleChips names={rolesOf(o.id).map((r) => r.role_name)} roles={roles.data} /> },
               {
                 key: "identifier",
@@ -181,6 +193,7 @@ function OrganisationDetail({ org, roles, assignments, linkedUsers, canUpdate, c
   const api = useApi();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(org.name);
+  const [externalKey, setExternalKey] = useState(org.external_key ?? "");
   const initialId = organisationIdentifier(org);
   const [scheme, setScheme] = useState<Scheme | "">(initialId?.scheme ?? "");
   const [identifier, setIdentifier] = useState(initialId?.value ?? "");
@@ -192,6 +205,7 @@ function OrganisationDetail({ org, roles, assignments, linkedUsers, canUpdate, c
   useEffect(() => {
     if (!editing) {
       setName(org.name);
+      setExternalKey(org.external_key ?? "");
       const id = organisationIdentifier(org);
       setScheme(id?.scheme ?? "");
       setIdentifier(id?.value ?? "");
@@ -211,8 +225,11 @@ function OrganisationDetail({ org, roles, assignments, linkedUsers, canUpdate, c
       for (const k of SCHEME_KEYS) delete next[k];
       if (scheme && identifier.trim()) next[scheme] = identifier.trim();
       const patch = attrsPatch(org.attrs, next);
-      const body: { name?: string; attrs?: Record<string, unknown> } = {};
+      const body: { name?: string; external_key?: string | null; attrs?: Record<string, unknown> } = {};
       if (name.trim() && name.trim() !== org.name) body.name = name.trim();
+      // "" means "no key" — an organisation that exists in this service only
+      const key = externalKey.trim() || null;
+      if (key !== (org.external_key ?? null)) body.external_key = key;
       if (Object.keys(patch).length) body.attrs = patch;
       if (Object.keys(body).length) await api.updateOrganisation(org.id, body);
       setEditing(false);
@@ -270,6 +287,14 @@ function OrganisationDetail({ org, roles, assignments, linkedUsers, canUpdate, c
         {editing ? (
           <div className={s.form}>
             <LabelledInput label="Name" value={name} onChange={(e) => setName(e.target.value)} required />
+            <LabelledInput
+              label="Shared key"
+              mono
+              value={externalKey}
+              onChange={(e) => setExternalKey(e.target.value)}
+              placeholder="byborre"
+              hint="Identifies THIS organisation in the other services. Each app issues its own internal id, so only this value means the same thing to all of them — it must match exactly. Leave empty if the organisation exists here only."
+            />
             <Field label="Identifier" hint="Optional. A laboratory may have none.">
               <div className={s.two}>
                 <Select value={scheme} onChange={(e) => setScheme(e.target.value as Scheme | "")} options={[{ value: "", label: "none" }, ...IDENTIFIER_SCHEMES.map((x) => ({ value: x.value, label: x.label }))]} />
@@ -354,6 +379,7 @@ function OrganisationDetail({ org, roles, assignments, linkedUsers, canUpdate, c
 function CreateOrganisationModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (o: Organisation) => Promise<void> }) {
   const api = useApi();
   const [name, setName] = useState("");
+  const [externalKey, setExternalKey] = useState("");
   const [scheme, setScheme] = useState<Scheme | "">("");
   const [identifier, setIdentifier] = useState("");
   const [busy, setBusy] = useState(false);
@@ -362,6 +388,7 @@ function CreateOrganisationModal({ open, onClose, onCreated }: { open: boolean; 
   useEffect(() => {
     if (open) {
       setName("");
+      setExternalKey("");
       setScheme("");
       setIdentifier("");
       setErr(null);
@@ -374,7 +401,11 @@ function CreateOrganisationModal({ open, onClose, onCreated }: { open: boolean; 
     try {
       const attrs: Record<string, unknown> = {};
       if (scheme && identifier.trim()) attrs[scheme] = identifier.trim();
-      const o = await api.createOrganisation({ name: name.trim(), attrs: Object.keys(attrs).length ? attrs : null });
+      const o = await api.createOrganisation({
+        name: name.trim(),
+        external_key: externalKey.trim() || null,
+        attrs: Object.keys(attrs).length ? attrs : null,
+      });
       await onCreated(o);
     } catch (e) {
       setErr(errorMessage(e));
@@ -401,6 +432,14 @@ function CreateOrganisationModal({ open, onClose, onCreated }: { open: boolean; 
     >
       {err && <Notice tone="error">{err}</Notice>}
       <LabelledInput label="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+      <LabelledInput
+        label="Shared key"
+        mono
+        value={externalKey}
+        onChange={(e) => setExternalKey(e.target.value)}
+        placeholder="byborre"
+        hint="Must match this organisation's key in the other services exactly. Leave empty if it exists here only."
+      />
       <Field label="Identifier" hint="Optional — assign roles and attributes after creating.">
         <div className={s.two}>
           <Select value={scheme} onChange={(e) => setScheme(e.target.value as Scheme | "")} options={[{ value: "", label: "none" }, ...IDENTIFIER_SCHEMES.map((x) => ({ value: x.value, label: x.label }))]} />
