@@ -19,7 +19,7 @@
  */
 
 import { DEFAULT_IDENTITY_HEADER, queryString, requestJson } from "../api/client";
-import type { Organisation, OrganisationRole } from "../api/types";
+import type { Organisation, OrganisationCreate, OrganisationRole } from "../api/types";
 import { identityStore } from "../api/identity";
 import type {
   ComparisonResponse,
@@ -105,6 +105,9 @@ export interface MdppApiClient {
    */
   listOrganisations(): Promise<Organisation[]>;
   listOrganisationRoles(): Promise<OrganisationRole[]>;
+  /** Create the counterpart of an organisation that exists in the host app but
+   *  not here — so a shared key is copied across rather than retyped. */
+  createOrganisation(body: OrganisationCreate): Promise<Organisation>;
 }
 
 /** GS1 paths contain slashes that are part of the path, so each SEGMENT is
@@ -215,6 +218,7 @@ export function createMdppClient(opts: MdppClientOptions = {}): MdppApiClient {
       return Array.isArray(body) ? body : body["@graph"] ?? [];
     },
     listOrganisationRoles: () => req("GET", "/admin/rbac/organisation-roles"),
+    createOrganisation: (b) => req("POST", "/organisations", b),
 
     async ping() {
       try {
