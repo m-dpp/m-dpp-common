@@ -22,6 +22,23 @@ its **own** front-end; this repo provides the shape and the logic they must not 
 Only cross-cutting *plumbing* that must not diverge between services:
 
 - `m_dpp_common.gs1` — GS1 identifier validation (GTIN / GLN check digits, `derive_gln`).
+  Two environment flags relax it, with **opposite defaults on purpose**:
+
+  | flag | default | when off |
+  |---|---|---|
+  | `GS1_PEDANTIC` | `true` | GTIN check digit not verified; GMN character set widened |
+  | `GLN_PEDANTIC` | `false` | a 7–12 digit company prefix is accepted and completed with `derive_gln` |
+
+  A GTIN becomes a permanent key for a passport and its check digit is the only thing that catches
+  a transposed pair of digits, so it is strict unless a deployment says otherwise; a GLN names a
+  company and getting it slightly wrong is recoverable. Both consuming apps set
+  `GS1_PEDANTIC=false` in their compose files, because inventing check digits by hand is friction
+  with no benefit in a demo.
+
+  Leniency relaxes **only** the checksum and the GMN character set — never length, digits, or the
+  `/ ? #` that structure a GS1 path. An identifier stored while lenient means exactly the same
+  thing under strictness, so this is a validation switch and never a data migration.
+  `validate_gtin(v, pedantic=True)` overrides the environment for one call.
 - `m_dpp_common.db` — async engine / session-factory / `get_db` builders.
 - `m_dpp_common.orm` — `Base`-agnostic SQLAlchemy mixins (UUID PK, timestamps, soft-delete, `attrs`, `apply_attrs_patch`).
 - `m_dpp_common.organisation` — the **Organisation** entity: `OrganisationMixin`, create/update schemas, a parametrised `/organisations` CRUD router. Nature comes solely from assigned roles; a **GLN is optional and lives in `attrs["gln"]`**; `PATCH {"active": false|true}` deactivates/reactivates; `GET /organisations?include_removed=true` lists inactive ones too.
