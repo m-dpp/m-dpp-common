@@ -27,6 +27,8 @@ import type {
   DeclarationListItem,
   DeclarationQuery,
   FibreNode,
+  FibreNodeCreate,
+  FibreNodeUpdate,
   Page,
   PathCounts,
   TestListItem,
@@ -71,8 +73,13 @@ export interface MdppApiClient {
   // tree annotations
   counts(paths: string[]): Promise<Record<string, PathCounts>>;
 
-  // taxonomy (the composition editor's fibre picker)
-  listFibreNodes(): Promise<FibreNode[]>;
+  // the fibre taxonomy — the composition editor's picker, and the tree the
+  // taxonomy screen edits (tolerance is an attribute on a node)
+  listFibreNodes(opts?: { includeRemoved?: boolean }): Promise<FibreNode[]>;
+  createFibreNode(body: FibreNodeCreate): Promise<FibreNode>;
+  updateFibreNode(id: string, body: FibreNodeUpdate): Promise<FibreNode>;
+  removeFibreNode(id: string): Promise<FibreNode>;
+  restoreFibreNode(id: string): Promise<FibreNode>;
 
   /** Cheap liveness probe for the "About this installation" screen. */
   ping(): Promise<boolean>;
@@ -162,10 +169,17 @@ export function createMdppClient(opts: MdppClientOptions = {}): MdppApiClient {
       return body.counts;
     },
 
-    async listFibreNodes() {
-      const body = await req<{ "@graph"?: FibreNode[] } | FibreNode[]>("GET", "/fibre-nodes");
+    async listFibreNodes(o = {}) {
+      const body = await req<{ "@graph"?: FibreNode[] } | FibreNode[]>(
+        "GET",
+        `/fibre-nodes${queryString({ include_removed: o.includeRemoved })}`,
+      );
       return Array.isArray(body) ? body : body["@graph"] ?? [];
     },
+    createFibreNode: (b) => req("POST", "/fibre-nodes", b),
+    updateFibreNode: (id, b) => req("PATCH", `/fibre-nodes/${id}`, b),
+    removeFibreNode: (id) => req("DELETE", `/fibre-nodes/${id}`),
+    restoreFibreNode: (id) => req("POST", `/fibre-nodes/${id}/restore`),
 
     async ping() {
       try {

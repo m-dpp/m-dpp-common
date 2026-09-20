@@ -28,3 +28,20 @@
               padding: 8px 10px; border: 1px solid var(--mdpp-border-2); border-radius: var(--mdpp-radius); }
 .versionRowCurrent { border-color: var(--mdpp-accent); }
 .scopeNote { display: flex; align-items: center; gap: 8px; font-size: var(--mdpp-fs-xs); color: var(--mdpp-muted); }
+
+/* ── fibre taxonomy ── */
+.taxonomyLayout { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .taxonomyLayout { grid-template-columns: 1fr; } }
+.tree { display: flex; flex-direction: column; gap: 1px; }
+.treeNode { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: var(--mdpp-radius);
+            cursor: pointer; font-size: var(--mdpp-fs-sm); }
+.treeNode:hover { background: var(--mdpp-surface-2); }
+.treeNodeSelected { background: var(--mdpp-accent-soft, var(--mdpp-surface-2)); font-weight: 500; }
+.treeNodeRemoved { opacity: 0.45; text-decoration: line-through; }
+.twisty { border: none; background: none; cursor: pointer; color: var(--mdpp-muted);
+          font-size: 9px; width: 14px; padding: 0; line-height: 1; }
+.twistySpacer { width: 14px; display: inline-block; }
+.treeChildren { margin-left: 14px; border-left: 1px solid var(--mdpp-border-2); padding-left: 4px; }
+.nodeLabel { flex: 1 1 auto; }
+.tolBadge { font-variant-numeric: tabular-nums; }
+.inheritedTol { opacity: 0.55; }

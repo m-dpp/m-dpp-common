@@ -217,12 +217,38 @@ export interface TestRegister {
   ticket_number: string;
 }
 
-/** A node of the fibre taxonomy, for the composition editor's fibre picker. */
+/** A node of the fibre taxonomy. */
 export interface FibreNode {
   id: string;
   slug: string;
   label: string;
   parent_id: string | null;
+  /** A legally-binding fibre name under EU 1007/2011 (wool, cotton, polyester…). */
   legal_name: boolean;
+  legal_ref?: string | null;
+  /** Open bag. `tolerance` (absolute percentage points) lives here and is what
+   *  every quantity verdict is measured against. */
   attrs?: Record<string, unknown> | null;
+  created_at?: string;
+  updated_at?: string;
+  removed_at?: string | null;
+}
+
+export interface FibreNodeCreate {
+  label: string;
+  slug?: string;
+  parent_id?: string | null;
+  legal_name?: boolean;
+  legal_ref?: string | null;
+  attrs?: Record<string, unknown>;
+}
+
+export interface FibreNodeUpdate {
+  label?: string;
+  slug?: string;
+  parent_id?: string | null;
+  legal_name?: boolean;
+  legal_ref?: string | null;
+  /** A merge patch onto the stored bag: `null` removes a key. */
+  attrs?: Record<string, unknown>;
 }
