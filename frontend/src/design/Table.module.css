@@ -1,4 +1,24 @@
 .wrap { width: 100%; overflow-x: auto; }
+
+/* A table tall enough to scroll needs its OWN scroll box, because a sticky
+   header sticks to its nearest scrolling ancestor — with the page scrolling
+   instead, the header would slide away with everything else. */
+.scrollBox { overflow: auto; }
+
+/* The border is drawn as an inset shadow: a real border-bottom belongs to the
+   cell and scrolls out of view with the row beneath it, leaving the stuck
+   header sitting on the rows with no separation. */
+.stickyHead thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--mdpp-surface);
+  border-bottom: none;
+  box-shadow: inset 0 -1px 0 var(--mdpp-border);
+}
+/* Where a sticky row and a sticky column meet, the corner must sit above both
+   or the first header cell is painted over as the body scrolls under it. */
+.stickyHead thead th:first-child { z-index: 3; }
 .table { width: 100%; border-collapse: collapse; font-size: var(--mdpp-fs-sm); }
 .table th {
   text-align: left; font-weight: 500; color: var(--mdpp-muted); font-size: var(--mdpp-fs-xs);

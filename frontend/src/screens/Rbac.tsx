@@ -279,7 +279,7 @@ function AttributesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
         ) : (attributes.data ?? []).length === 0 ? (
           <EmptyState compact title={attributes.loading ? "Loading…" : `No attributes registered for ${entityType || "this entity type"}`} description="Register attributes manually (including computed ones that never appear in stored data), or sync them from the data." />
         ) : (
-          <Table compact className={s.matrix}>
+          <Table compact stickyHeader maxHeight="calc(100vh - 280px)" className={s.matrix}>
             <thead>
               <tr>
                 <th>Attribute</th>
@@ -414,7 +414,7 @@ function ResourcesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
         <Card key={rt}>
           <CardHeader title={rt} subtitle="role × operation" />
           <CardBody flush>
-            <Table compact className={s.matrix}>
+            <Table compact stickyHeader maxHeight="calc(100vh - 280px)" className={s.matrix}>
               <thead>
                 <tr>
                   <th>Role</th>

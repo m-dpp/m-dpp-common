@@ -1,5 +1,11 @@
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+/* The first column is the row's identity (the attribute or resource type), so it
+   stays put while the role columns scroll sideways — a checkbox with no visible
+   row label is unreadable. The header row's own z-index is raised in Table.module.css
+   so the two sticky axes do not paint over each other where they cross. */
 .matrix th:first-child, .matrix td:first-child { position: sticky; left: 0; background: var(--mdpp-surface); z-index: 1; }
+/* hover repaints the row background, which would show through the sticky column */
+.matrix tbody tr:hover td:first-child { background: var(--mdpp-surface-2); }
 .matrix td { padding: 4px 8px !important; }
 .matrix th { text-align: center !important; }
 .matrix th:first-child { text-align: left !important; }
