@@ -44,7 +44,7 @@ export interface AdminApiClient {
   createSubject(body: SubjectCreate): Promise<Subject>;
   deleteSubject(id: string): Promise<void>;
   listMemberships(): Promise<Membership[]>;
-  createMembership(subjectId: string, organisationId: string): Promise<Membership>;
+  createMembership(subjectId: string, organisationId: string, isOrgAdmin?: boolean): Promise<Membership>;
   deleteMembership(id: string): Promise<void>;
 
   // the current principal ("who am I acting as")
@@ -76,13 +76,26 @@ export function queryString(query?: Record<string, string | number | boolean | u
 export async function requestJson<T>(
   method: string,
   url: string,
-  opts: { body?: unknown; getIdentity?: () => string | null; identityHeader?: string; fetchImpl?: typeof fetch } = {},
+  opts: {
+    body?: unknown;
+    getIdentity?: () => string | null;
+    identityHeader?: string;
+    /** Which membership the request acts under — see `identityStore`. */
+    getActingOrganisation?: () => string | null;
+    actingOrganisationHeader?: string;
+    fetchImpl?: typeof fetch;
+  } = {},
 ): Promise<T> {
   const f = opts.fetchImpl ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
   const headers: Record<string, string> = { Accept: "application/json" };
   if (opts.body !== undefined) headers["Content-Type"] = "application/json";
   const identity = opts.getIdentity?.();
   if (identity) headers[opts.identityHeader ?? DEFAULT_IDENTITY_HEADER] = identity;
+  // Sent separately from the identity on purpose: who you are is proved, which
+  // organisation you act under is chosen. The backend refuses a choice the
+  // subject holds no membership for, so this header grants nothing by itself.
+  const actingOrg = opts.getActingOrganisation?.();
+  if (actingOrg) headers[opts.actingOrganisationHeader ?? DEFAULT_ACTING_ORG_HEADER] = actingOrg;
   const res = await f(url, { method, headers, body: opts.body === undefined ? undefined : JSON.stringify(opts.body) });
   if (res.status === 204) return undefined as T;
   const text = await res.text();
@@ -118,6 +131,8 @@ export interface FetchClientOptions {
   getIdentity?: () => string | null;
   /** Header carrying the dev identity. Only the dev identity source reads it. */
   identityHeader?: string;
+  /** Which membership requests act under — see `identityStore`. */
+  getActingOrganisation?: () => string | null;
   fetchImpl?: typeof fetch;
   /** Paths under the base (defaults match the shared backend routers). */
   paths?: Partial<typeof DEFAULT_PATHS>;
@@ -125,6 +140,11 @@ export interface FetchClientOptions {
 
 /** Header the dev identity source reads. Only the dev identity path knows about it. */
 export const DEFAULT_IDENTITY_HEADER = "X-Dev-Sub";
+
+/** Header carrying the organisation being acted under. Unlike the identity
+ *  header, this one survives real authentication — the choice is still the
+ *  user's to make, it just travels in a session or token claim instead. */
+export const DEFAULT_ACTING_ORG_HEADER = "X-Acting-Org";
 
 export const DEFAULT_PATHS = {
   organisations: "/organisations",
@@ -140,7 +160,13 @@ export function createFetchClient(opts: FetchClientOptions = {}): AdminApiClient
   const header = opts.identityHeader ?? DEFAULT_IDENTITY_HEADER;
 
   const req = <T,>(method: string, path: string, body?: unknown, query?: Record<string, string | boolean | undefined>) =>
-    requestJson<T>(method, `${base}${path}${queryString(query)}`, { body, getIdentity: opts.getIdentity, identityHeader: header, fetchImpl: opts.fetchImpl });
+    requestJson<T>(method, `${base}${path}${queryString(query)}`, {
+      body,
+      getIdentity: opts.getIdentity,
+      identityHeader: header,
+      getActingOrganisation: opts.getActingOrganisation,
+      fetchImpl: opts.fetchImpl,
+    });
 
   const rbac = paths.rbac;
   return {
@@ -162,7 +188,8 @@ export function createFetchClient(opts: FetchClientOptions = {}): AdminApiClient
     createSubject: (b) => req("POST", paths.subjects, b),
     deleteSubject: (id) => req("DELETE", `${paths.subjects}/${id}`),
     listMemberships: () => req("GET", paths.memberships),
-    createMembership: (subject_id, organisation_id) => req("POST", paths.memberships, { subject_id, organisation_id }),
+    createMembership: (subject_id, organisation_id, is_org_admin = false) =>
+      req("POST", paths.memberships, { subject_id, organisation_id, is_org_admin }),
     deleteMembership: (id) => req("DELETE", `${paths.memberships}/${id}`),
 
     me: () => req("GET", paths.me),

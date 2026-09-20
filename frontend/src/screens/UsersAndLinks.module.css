@@ -1,3 +1,9 @@
 .sub { display: flex; flex-direction: column; gap: 1px; }
 .subId { font-family: var(--mdpp-mono); font-size: var(--mdpp-fs-xs); color: var(--mdpp-muted); }
 .actions { display: flex; gap: 4px; justify-content: flex-end; }
+
+.memberships { display: flex; flex-direction: column; gap: 4px; }
+.membership { display: inline-flex; align-items: center; gap: 6px; }
+.unlink { border: none; background: none; cursor: pointer; color: var(--mdpp-muted);
+          font-size: 13px; line-height: 1; padding: 0 2px; }
+.unlink:hover { color: var(--mdpp-error); }

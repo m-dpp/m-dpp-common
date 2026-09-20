@@ -50,12 +50,26 @@ export interface OrganisationRole {
   role_name: string;
 }
 
+export interface SubjectMembership {
+  id: string;
+  organisation: { id: string; name: string } | null;
+  is_org_admin: boolean;
+  /** The organisation's roles — what this subject holds WHEN acting for it. */
+  roles: string[];
+}
+
 export interface Subject {
   id: string;
   sub: string;
   email: string | null;
   display_name: string | null;
-  membership: { id: string; organisation: { id: string; name: string } | null } | null;
+  /** Every organisation this subject may act for. */
+  memberships: SubjectMembership[];
+  /** @deprecated the FIRST membership, for callers written when there was at
+   *  most one. With several there is no single answer — use `memberships`. */
+  membership: SubjectMembership | null;
+  /** Every role held in SOME organisation, for display only. Authority is
+   *  always one organisation's at a time, never this union. */
   roles: string[];
 }
 
@@ -69,6 +83,7 @@ export interface Membership {
   id: string;
   subject_id: string;
   organisation_id: string;
+  is_org_admin: boolean;
   sub: string | null;
   organisation_name: string | null;
 }
@@ -80,7 +95,13 @@ export interface Principal {
   anonymous: boolean;
   reason: string | null;
   subject: { id: string; sub: string; email: string | null; display_name: string | null } | null;
+  /** The organisation currently being acted for. */
   organisation: { id: string; name: string } | null;
+  /** …and whether this membership may administer it. */
+  is_org_admin: boolean;
+  /** Every organisation this subject may act for. Offered as choices; confers
+   *  nothing by itself. */
+  organisations: { id: string; name: string; is_org_admin: boolean }[];
   roles: string[];
   /** @deprecated compat: roles[0] */
   role: string;

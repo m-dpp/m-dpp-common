@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useApi } from "../api/context";
-import { useActingAs } from "../api/identity";
+import { useActingAs, useActingOrganisation } from "../api/identity";
 import { usePrincipal } from "../api/principal";
 import type { Role } from "../api/types";
 import { Chip } from "../design/Chip";
@@ -14,13 +14,22 @@ export interface ActingAsSwitcherProps {
 }
 
 /**
- * DEVELOPMENT affordance for the sidebar footer: pick which known subject the UI
- * acts as. Switching re-resolves the principal (organisation + roles) and the UI
- * adapts. This is not authentication and is visibly marked as temporary.
+ * Two controls that look like one, because they answer two different questions.
+ *
+ * - **Acting as** — which known subject the UI is. A DEVELOPMENT affordance,
+ *   visibly marked as temporary: real authentication replaces it.
+ * - **On behalf of** — which of that subject's memberships is in force. This is
+ *   NOT temporary. A user with several memberships must choose, and the choice
+ *   decides both their authority and who owns anything they create. It only
+ *   appears when there is an actual choice to make.
+ *
+ * Roles are never merged across memberships, so the chips below always show the
+ * authority of exactly one organisation.
  */
 export function ActingAsSwitcher({ roles }: ActingAsSwitcherProps) {
   const api = useApi();
   const [actingAs, setActingAs] = useActingAs();
+  const [actingOrg, setActingOrg] = useActingOrganisation();
   const { principal, loading, error } = usePrincipal();
   const subjects = useAsync(() => api.listSubjects(), [api]);
 
@@ -52,10 +61,36 @@ export function ActingAsSwitcher({ roles }: ActingAsSwitcherProps) {
           </option>
         ))}
       </Select>
+      {/* Only shown when there is a choice: one membership needs no picker. */}
+      {(principal?.organisations?.length ?? 0) > 1 && (
+        <>
+          <div className={s.label}>
+            <span>On behalf of</span>
+          </div>
+          <Select
+            size_="sm"
+            value={actingOrg ?? ""}
+            onChange={(e) => setActingOrg(e.target.value || null)}
+            aria-label="Act on behalf of organisation"
+          >
+            <option value="">— choose an organisation —</option>
+            {(principal?.organisations ?? []).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+                {o.is_org_admin ? "  (admin)" : ""}
+              </option>
+            ))}
+          </Select>
+        </>
+      )}
+
       <div className={s.who}>
         <div className={s.name}>{loading && !principal ? "Resolving…" : who}</div>
         {principal?.organisation ? (
-          <div className={s.org}>represents {principal.organisation.name}</div>
+          <div className={s.org}>
+            acting for {principal.organisation.name}
+            {principal.is_org_admin && <span className={s.orgAdmin}> · org admin</span>}
+          </div>
         ) : (
           <div className={s.org}>no organisation</div>
         )}

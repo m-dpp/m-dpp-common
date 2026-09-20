@@ -13,7 +13,7 @@ export interface ApiProviderProps {
 }
 
 export function ApiProvider({ client, baseUrl, children }: ApiProviderProps) {
-  const value = useMemo(() => client ?? createFetchClient({ baseUrl, getIdentity: identityStore.get }), [client, baseUrl]);
+  const value = useMemo(() => client ?? createFetchClient({ baseUrl, getIdentity: identityStore.get, getActingOrganisation: identityStore.getOrganisation }), [client, baseUrl]);
   return <ApiContext.Provider value={value}>{children}</ApiContext.Provider>;
 }
 

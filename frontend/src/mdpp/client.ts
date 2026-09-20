@@ -45,6 +45,7 @@ export interface MdppClientOptions {
   baseUrl?: string;
   getIdentity?: () => string | null;
   identityHeader?: string;
+  getActingOrganisation?: () => string | null;
   fetchImpl?: typeof fetch;
 }
 
@@ -108,12 +109,16 @@ export function createMdppClient(opts: MdppClientOptions = {}): MdppApiClient {
   const base = (opts.baseUrl ?? DEFAULT_MDPP_BASE).replace(/\/+$/, "");
   const header = opts.identityHeader ?? DEFAULT_IDENTITY_HEADER;
   const getIdentity = opts.getIdentity ?? identityStore.get;
+  // the SAME store the dpp client reads, so switching context switches it for
+  // both APIs at once
+  const getActingOrganisation = opts.getActingOrganisation ?? identityStore.getOrganisation;
 
   const req = <T,>(method: string, path: string, body?: unknown) =>
     requestJson<T>(method, `${base}${path}`, {
       body,
       getIdentity,
       identityHeader: header,
+      getActingOrganisation,
       fetchImpl: opts.fetchImpl,
     });
 

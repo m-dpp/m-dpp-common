@@ -6,3 +6,4 @@
 .org { font-size: var(--mdpp-fs-xs); color: var(--mdpp-text-2); }
 .reason { font-size: var(--mdpp-fs-xs); color: #8a5a12; }
 .roles { display: flex; flex-wrap: wrap; gap: 3px; }
+.orgAdmin { color: var(--mdpp-accent); font-weight: 600; }

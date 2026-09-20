@@ -35,7 +35,7 @@ export function MdppProvider({ enabled, baseUrl, client, children }: MdppProvide
     return {
       enabled: enabled ?? Boolean(baseUrl || client),
       baseUrl: base,
-      client: client ?? createMdppClient({ baseUrl: base, getIdentity: identityStore.get }),
+      client: client ?? createMdppClient({ baseUrl: base, getIdentity: identityStore.get, getActingOrganisation: identityStore.getOrganisation }),
     };
   }, [enabled, baseUrl, client]);
 

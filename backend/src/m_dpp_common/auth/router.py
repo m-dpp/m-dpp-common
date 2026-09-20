@@ -6,9 +6,10 @@ mounts it against its own tables — the organisation pattern.
 
     GET    /subjects            known identities + the organisation each represents + its roles
     POST   /subjects            create one by hand (no real identity provider yet)
-    DELETE /subjects/{id}       remove (its membership goes with it)
+    DELETE /subjects/{id}       remove (its memberships go with it)
     GET    /memberships
-    POST   /memberships         link a subject to an organisation (409 if already linked)
+    POST   /memberships         link a subject to an organisation (409 if already a member
+                                of THAT one — several organisations are allowed)
     DELETE /memberships/{id}    unlink
     GET    /me                  the resolved principal + its effective resource permissions
 
@@ -48,6 +49,9 @@ class SubjectCreate(BaseModel):
 class MembershipCreate(BaseModel):
     subject_id: uuid.UUID
     organisation_id: uuid.UUID
+    #: may administer THIS organisation — its members and its own record.
+    #: Scoped to the membership, never platform-wide.
+    is_org_admin: bool = False
 
 
 def make_subjects_router(
@@ -108,28 +112,36 @@ def make_subjects_router(
     async def list_subjects(db: AsyncSession = Depends(get_db)):
         subjects = (await db.execute(select(Subject).order_by(Subject.sub))).scalars().all()
         memberships = (await db.execute(select(Membership))).scalars().all()
-        by_subject = {m.subject_id: m for m in memberships}
+        by_subject: dict = {}
+        for m in memberships:
+            by_subject.setdefault(m.subject_id, []).append(m)
         org_ids = list({m.organisation_id for m in memberships})
         orgs = await _orgs_by_id(org_ids, db)
         roles = await _roles_by_org(org_ids, db)
+
         out = []
         for s in subjects:
-            m = by_subject.get(s.id)
-            org = orgs.get(m.organisation_id) if m else None
-            out.append(
-                {
-                    **subject_out(s),
-                    "membership": (
-                        {
-                            "id": str(m.id),
-                            "organisation": {"id": str(org.id), "name": org.name} if org else None,
-                        }
-                        if m
-                        else None
-                    ),
-                    "roles": roles.get(m.organisation_id, []) if m else [],
-                }
-            )
+            mine = by_subject.get(s.id, [])
+            rows = []
+            for m in mine:
+                org = orgs.get(m.organisation_id)
+                rows.append({
+                    "id": str(m.id),
+                    "organisation": {"id": str(org.id), "name": org.name} if org else None,
+                    "is_org_admin": bool(m.is_org_admin),
+                    "roles": roles.get(m.organisation_id, []),
+                })
+            out.append({
+                **subject_out(s),
+                "memberships": rows,
+                # Compat for callers written when a subject had at most one. It
+                # is the FIRST membership, not a merge — with several, there is
+                # no single answer, which is the whole point.
+                "membership": rows[0] if rows else None,
+                # Every role this subject could hold in SOME organisation. For
+                # display only: authority is always one organisation's at a time.
+                "roles": sorted({r for row in rows for r in row["roles"]}),
+            })
         return out
 
     @router.post("/subjects", status_code=201, dependencies=[CREATE])
@@ -142,7 +154,7 @@ def make_subjects_router(
             await db.rollback()
             raise HTTPException(status_code=409, detail="A subject with this sub already exists")
         await db.refresh(obj)
-        return {**subject_out(obj), "membership": None, "roles": []}
+        return {**subject_out(obj), "memberships": [], "membership": None, "roles": []}
 
     @router.delete("/subjects/{subject_id}", status_code=204, dependencies=[DELETE])
     async def delete_subject(subject_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
@@ -159,6 +171,7 @@ def make_subjects_router(
             "id": str(m.id),
             "subject_id": str(m.subject_id),
             "organisation_id": str(m.organisation_id),
+            "is_org_admin": bool(m.is_org_admin),
             "sub": subject.sub if subject else None,
             "organisation_name": org.name if org else None,
         }
@@ -186,15 +199,21 @@ def make_subjects_router(
         org = await db.get(Organisation, body.organisation_id)
         if org is None or getattr(org, "removed_at", None) is not None:
             raise HTTPException(status_code=422, detail="organisation_id does not reference an active organisation")
-        obj = Membership(subject_id=body.subject_id, organisation_id=body.organisation_id)
+        obj = Membership(
+            subject_id=body.subject_id,
+            organisation_id=body.organisation_id,
+            is_org_admin=bool(getattr(body, "is_org_admin", False)),
+        )
         db.add(obj)
         try:
             await db.commit()
         except IntegrityError:
             await db.rollback()
+            # A subject may hold several memberships, just not two to the SAME
+            # organisation.
             raise HTTPException(
                 status_code=409,
-                detail="This subject already represents an organisation — unlink it first",
+                detail="This subject is already a member of that organisation",
             )
         await db.refresh(obj)
         return _membership_out(obj, subject, org)
