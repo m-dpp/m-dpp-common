@@ -243,6 +243,10 @@ export function Comparison({ comparison, showLegend = true, contextNote }: Compa
       {/* shown once per comparison, not per row */}
       <Basis declaration={declaration} />
 
+      {/* The eight verdict columns are the point of this component, so they are
+          not dropped in a narrow host — but they must scroll inside their own
+          box rather than widening the card they sit in. */}
+      <div className={s.tableScroll}>
       <table className={s.table}>
         <thead>
           <tr>
@@ -262,6 +266,7 @@ export function Comparison({ comparison, showLegend = true, contextNote }: Compa
           ))}
         </tbody>
       </table>
+      </div>
 
       {flags.length > 0 && (
         <div className={s.flags}>

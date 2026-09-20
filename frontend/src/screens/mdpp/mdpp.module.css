@@ -48,3 +48,11 @@
 
 .declaringOrg { display: flex; flex-direction: column; gap: 2px; font-size: var(--mdpp-fs-sm); }
 .declaringOrg span { color: var(--mdpp-muted); font-size: var(--mdpp-fs-xs); }
+
+/* The action column stays reachable when the table is narrower than its content
+   — a "See results" button you have to scroll sideways to reach is the one
+   column that must never be the one clipped. */
+.actionCol { position: sticky; right: 0; background: var(--mdpp-surface); text-align: right; }
+tbody tr:hover .actionCol { background: var(--mdpp-surface-2); }
+/* pinned to one product, the identifier columns are dead weight */
+.scopedTable { table-layout: auto; }

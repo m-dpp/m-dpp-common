@@ -170,25 +170,25 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
       {list.error && <Notice tone="error">{list.error}</Notice>}
       {actionError && <Notice tone="error">{actionError}</Notice>}
 
-      <Table>
+      <Table compact={Boolean(pathScope)}>
         <thead>
           <tr>
             {!pathScope && <th>GS1 path</th>}
             {!pathScope && <th>Level</th>}
-            <th>Requested by</th>
+            {!pathScope && <th>Requested by</th>}
             <th>Laboratory</th>
             <th>Type</th>
-            <th>Ticket</th>
+            {!pathScope && <th>Ticket</th>}
             <th>Requested</th>
             <th>Result</th>
             <th>Status</th>
-            <th />
+            <th className={s.actionCol} />
           </tr>
         </thead>
         <tbody>
           {items.length === 0 && (
             <tr>
-              <td colSpan={pathScope ? 8 : 10}>
+              <td colSpan={pathScope ? 6 : 10}>
                 {list.loading ? (
                   <EmptyState title="Loading…" />
                 ) : (
@@ -209,8 +209,15 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
               <tr>
                 {!pathScope && <td><span className={s.path}>{t.gs1_path}</span></td>}
                 {!pathScope && <td>{t.level ? <Tag>{t.level}</Tag> : <span className={s.sub}>—</span>}</td>}
-                <td>{t.requested_by_name ?? <span className={s.sub}>—</span>}</td>
-                <td>{t.laboratory_name ?? t.laboratory_id}</td>
+                {!pathScope && <td>{t.requested_by_name ?? <span className={s.sub}>—</span>}</td>}
+                <td>
+                  {/* pinned to one product the panel is narrow, so the ticket
+                      rides under the lab rather than claiming a column */}
+                  <div className={s.pathCell}>
+                    <span>{t.laboratory_name ?? t.laboratory_id}</span>
+                    {pathScope && <span className={s.path}>{t.ticket_number}</span>}
+                  </div>
+                </td>
                 <td>
                   {t.analysis_type
                     ? <Chip tone={t.analysis_type === "in_loco" ? "neutral" : "warn"}>
@@ -218,7 +225,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
                       </Chip>
                     : <span className={s.sub}>—</span>}
                 </td>
-                <td><span className={s.path}>{t.ticket_number}</span></td>
+                {!pathScope && <td><span className={s.path}>{t.ticket_number}</span></td>}
                 <td className={s.sub}>{t.requested_at ? new Date(t.requested_at).toLocaleDateString() : "—"}</td>
                 <td className={s.sub}>{t.analysed_at ? new Date(t.analysed_at).toLocaleDateString() : "—"}</td>
                 <td>
@@ -230,7 +237,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
                   </span>
                   {t.status_message && <div className={s.sub}>{t.status_message}</div>}
                 </td>
-                <td>
+                <td className={s.actionCol}>
                   {t.status === "completed" ? (
                     <Button size="sm" variant="ghost" onClick={() => setExpanded(expanded === t.id ? null : t.id)}>
                       {expanded === t.id ? "Hide results" : "See results"}
@@ -246,7 +253,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
               </tr>
               {expanded === t.id && (
                 <tr>
-                  <td colSpan={pathScope ? 8 : 10} className={s.expando}>
+                  <td colSpan={pathScope ? 6 : 10} className={s.expando}>
                     <ResultPanel test={t} note={comparisonNote} />
                   </td>
                 </tr>

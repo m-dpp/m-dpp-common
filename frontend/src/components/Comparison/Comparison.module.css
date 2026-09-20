@@ -12,7 +12,8 @@
 .basisNote { color: var(--mdpp-muted); }
 
 /* ── table ── */
-.table { width: 100%; border-collapse: collapse; font-size: var(--mdpp-fs-sm); }
+.tableScroll { overflow-x: auto; max-width: 100%; }
+.table { width: 100%; min-width: 640px; border-collapse: collapse; font-size: var(--mdpp-fs-sm); }
 .table th { text-align: left; font-weight: 500; font-size: var(--mdpp-fs-xs); color: var(--mdpp-muted);
             padding: 6px 10px; border-bottom: 1px solid var(--mdpp-border); white-space: nowrap; }
 .table td { padding: 8px 10px; border-bottom: 1px solid var(--mdpp-border-2); vertical-align: top; }
