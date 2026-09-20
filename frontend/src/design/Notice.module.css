@@ -1,4 +1,10 @@
-.notice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: var(--mdpp-radius); font-size: var(--mdpp-fs-sm); border: 1px solid var(--mdpp-border); background: var(--mdpp-surface-2); color: var(--mdpp-text-2); }
+/* Block, not flex: a notice is PROSE. As a flex row every inline element in
+   the sentence — a <strong>, a <code> — became a separate flex item with a
+   gap beside it, so one sentence rendered as several columns. Anything that
+   needs a row can use a flex wrapper inside. */
+.notice { display: block; padding: 10px 12px; border-radius: var(--mdpp-radius);
+  font-size: var(--mdpp-fs-sm); line-height: 1.5; border: 1px solid var(--mdpp-border);
+  background: var(--mdpp-surface-2); color: var(--mdpp-text-2); }
 .info { }
 .ok { background: var(--mdpp-ok-bg); border-color: transparent; color: var(--mdpp-ok); }
 .warn { background: var(--mdpp-warn-bg); border-color: transparent; color: #8a5a12; }
