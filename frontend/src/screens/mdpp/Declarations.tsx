@@ -208,6 +208,46 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
   );
 }
 
+// ── the action on its own ────────────────────────────────────────────────
+
+export interface DeclareCompositionProps {
+  /** The identifier the composition is declared for. */
+  gs1Path: string;
+  onDeclared?: () => void | Promise<void>;
+  label?: string;
+  /** The RBAC resource type declarations are gated on in the host's policy. */
+  resourceType?: string;
+}
+
+/**
+ * Just the "declare a composition" action — the button and its modal, without
+ * the list. A host that already shows the declaration (dpp-app's Molecular tab
+ * shows the *effective* one, resolved up the chain) mounts this rather than a
+ * second table that would repeat it.
+ */
+export function DeclareComposition({
+  gs1Path,
+  onDeclared,
+  label = "Declare composition here",
+  resourceType = "declarations",
+}: DeclareCompositionProps) {
+  const { can } = usePrincipal();
+  const [open, setOpen] = useState(false);
+  if (!can(resourceType, "create")) return null;
+  return (
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}>{label}</Button>
+      {open && (
+        <NewVersionModal
+          gs1Path={gs1Path}
+          onClose={() => setOpen(false)}
+          onSaved={async () => { setOpen(false); await onDeclared?.(); }}
+        />
+      )}
+    </>
+  );
+}
+
 // ── new version ──────────────────────────────────────────────────────────
 
 const REASONS = [
