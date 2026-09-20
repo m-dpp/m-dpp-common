@@ -255,17 +255,19 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
                   ? `${items.length} shown · ${list.data.total} total`
                   : undefined
             }
-            actions={mayWrite && pathScope && (
-              <Button size="sm" onClick={() => setRegistering(true)}>Register test here</Button>
+            actions={mayWrite && (
+              <Button size="sm" onClick={() => setRegistering(true)}>
+                {pathScope ? "Register test here" : "Register a test"}
+              </Button>
             )}
           />
           <CardBody>{body}</CardBody>
         </Card>
       )}
 
-      {registering && pathScope && (
+      {registering && (
         <RegisterTestModal
-          gs1Path={pathScope}
+          gs1Path={pathScope ?? ""}
           labs={labs}
           onClose={() => setRegistering(false)}
           onSaved={() => { setRegistering(false); void list.reload(); }}
@@ -312,18 +314,60 @@ function ResultPanel({ test, note }: { test: TestListItem; note?: React.ReactNod
 
 // ── register ─────────────────────────────────────────────────────────────
 
+export interface RegisterTestProps {
+  /** The identifier the test is registered on. */
+  gs1Path: string;
+  /** Called after a successful registration. */
+  onRegistered?: () => void | Promise<void>;
+  label?: string;
+  /** The RBAC resource type tests are gated on in the host's policy. */
+  resourceType?: string;
+}
+
+/**
+ * Just the "register a test" action — the button and its modal, without the
+ * list. A host that already shows the tests (dpp-app's Molecular tab gathers
+ * them per level) mounts this instead of a second copy of the table.
+ */
+export function RegisterTest({ gs1Path, onRegistered, label = "Register test here", resourceType = "tests" }: RegisterTestProps) {
+  const api = useApi();
+  const { can } = usePrincipal();
+  const [open, setOpen] = useState(false);
+  const orgs = useAsync(() => api.listOrganisations(), [api]);
+  const labs = useMemo(() => (orgs.data ?? []).filter((o) => !o.removed_at), [orgs.data]);
+
+  if (!can(resourceType, "create")) return null;
+  return (
+    <>
+      <Button size="sm" onClick={() => setOpen(true)}>{label}</Button>
+      {open && (
+        <RegisterTestModal
+          gs1Path={gs1Path}
+          labs={labs}
+          onClose={() => setOpen(false)}
+          onSaved={async () => { setOpen(false); await onRegistered?.(); }}
+        />
+      )}
+    </>
+  );
+}
+
 function RegisterTestModal({
   gs1Path,
   labs,
   onClose,
   onSaved,
 }: {
+  /** Fixed when the screen is path-scoped; otherwise the starting value of an
+   *  editable field, so an admin can register against any identifier. */
   gs1Path: string;
   labs: { id: string; name: string }[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const mdpp = useMdpp();
+  const [path, setPath] = useState(gs1Path);
+  const pathFixed = Boolean(gs1Path);
   const [laboratoryId, setLaboratoryId] = useState("");
   const [ticket, setTicket] = useState("");
   const [saving, setSaving] = useState(false);
@@ -333,7 +377,7 @@ function RegisterTestModal({
     setSaving(true);
     setError(null);
     try {
-      await mdpp.registerTest(gs1Path, { laboratory_id: laboratoryId, ticket_number: ticket.trim() });
+      await mdpp.registerTest(path.trim(), { laboratory_id: laboratoryId, ticket_number: ticket.trim() });
       onSaved();
     } catch (e) {
       setError(errorMessage(e));
@@ -350,7 +394,7 @@ function RegisterTestModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving || !laboratoryId || !ticket.trim()}>
+          <Button onClick={save} disabled={saving || !laboratoryId || !ticket.trim() || !path.trim()}>
             {saving ? "Registering…" : "Register test"}
           </Button>
         </>
@@ -362,7 +406,14 @@ function RegisterTestModal({
           identifier. Results are never entered here — they are pulled from the laboratory with
           that ticket, which is what makes them evidence rather than a claim.
         </Notice>
-        <LabelledInput label="GS1 path" value={gs1Path} readOnly />
+        <LabelledInput
+          label="GS1 path"
+          value={path}
+          readOnly={pathFixed}
+          onChange={(e) => setPath(e.target.value)}
+          placeholder="01/08718036001015/10/LOT-2026-BB-001"
+          hint={pathFixed ? undefined : "The identifier the laboratory analysed."}
+        />
         <LabelledSelect label="Laboratory" value={laboratoryId} onChange={(e) => setLaboratoryId(e.target.value)}>
           <option value="">Select a laboratory…</option>
           {labs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}

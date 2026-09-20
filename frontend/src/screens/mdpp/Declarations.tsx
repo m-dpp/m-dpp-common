@@ -130,8 +130,8 @@ export function Declarations({ pathScope = null, resourceType = "declarations", 
           }
           actions={
             mayCreate && (
-              <Button size="sm" onClick={() => setCreating(true)} disabled={!pathScope && !selected}>
-                New version
+              <Button size="sm" onClick={() => setCreating(true)}>
+                {pathScope ? "New version" : "Declare composition"}
               </Button>
             )
           }
@@ -201,7 +201,7 @@ export function Declarations({ pathScope = null, resourceType = "declarations", 
 
       {creating && (
         <NewVersionModal
-          gs1Path={pathScope ?? selected!}
+          gs1Path={pathScope ?? selected ?? ""}
           declaredBy={declaredBy ?? principal?.organisation?.id ?? ""}
           onClose={() => setCreating(false)}
           onSaved={() => { setCreating(false); void list.reload(); }}
@@ -226,6 +226,9 @@ function NewVersionModal({
   onClose,
   onSaved,
 }: {
+  /** Fixed when the screen is path-scoped; otherwise the starting value of an
+   *  editable field, because there is no other way to make a FIRST declaration
+   *  on a product that has none. */
   gs1Path: string;
   declaredBy: string;
   onClose: () => void;
@@ -233,6 +236,8 @@ function NewVersionModal({
 }) {
   const mdpp = useMdpp();
   const fibres = useAsync(() => mdpp.listFibreNodes(), [mdpp]);
+  const [path, setPath] = useState(gs1Path);
+  const pathFixed = Boolean(gs1Path);
   const [rows, setRows] = useState<CompositionRow[]>([{ fibre: "", percentage: "" }]);
   const [reason, setReason] = useState<(typeof REASONS)[number]["value"]>("initial");
   const [org, setOrg] = useState(declaredBy);
@@ -245,7 +250,7 @@ function NewVersionModal({
     setSaving(true);
     setError(null);
     try {
-      await mdpp.createDeclarationVersion(gs1Path, { declared_by: org, reason, components });
+      await mdpp.createDeclarationVersion(path.trim(), { declared_by: org, reason, components });
       onSaved();
     } catch (e) {
       setError(errorMessage(e));
@@ -262,7 +267,7 @@ function NewVersionModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving || components.length === 0 || !org}>
+          <Button onClick={save} disabled={saving || components.length === 0 || !org || !path.trim()}>
             {saving ? "Saving…" : "Create version"}
           </Button>
         </>
@@ -275,7 +280,14 @@ function NewVersionModal({
           against the version that was current when it was requested.
         </Notice>
 
-        <LabelledInput label="GS1 path" value={gs1Path} readOnly />
+        <LabelledInput
+          label="GS1 path"
+          value={path}
+          readOnly={pathFixed}
+          onChange={(e) => setPath(e.target.value)}
+          placeholder="01/08718036001015/10/LOT-2026-BB-001"
+          hint={pathFixed ? undefined : "The identifier this composition is declared for. A first declaration creates version 1."}
+        />
         <LabelledInput
           label="Declared by (organisation id)"
           value={org}

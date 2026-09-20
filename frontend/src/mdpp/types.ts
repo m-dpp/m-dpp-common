@@ -259,3 +259,14 @@ export interface FibreNodeUpdate {
   /** A merge patch onto the stored bag: `null` removes a key. */
   attrs?: Record<string, unknown>;
 }
+
+/** The resolved principal as mdpp-app reports it (`GET /me`). */
+export interface MdppPrincipal {
+  sub: string | null;
+  anonymous: boolean;
+  /** Why it is anonymous — e.g. "unknown subject", "no identity supplied". */
+  reason: string | null;
+  organisation: { id: string; name: string } | null;
+  roles: string[];
+  permissions?: Record<string, Record<string, boolean>>;
+}

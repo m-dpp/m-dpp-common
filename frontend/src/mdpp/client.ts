@@ -33,6 +33,7 @@ import type {
   PathCounts,
   TestListItem,
   TestQuery,
+  MdppPrincipal,
   TestRegister,
 } from "./types";
 
@@ -83,6 +84,14 @@ export interface MdppApiClient {
 
   /** Cheap liveness probe for the "About this installation" screen. */
   ping(): Promise<boolean>;
+
+  /**
+   * Who the current identity is **in mdpp**. The two services share no user
+   * table, only the `sub`, so this can legitimately differ from the host app's
+   * own principal — including resolving to the anonymous role here. A host must
+   * ask rather than assume its own answer carries over.
+   */
+  me(): Promise<MdppPrincipal>;
 }
 
 /** GS1 paths contain slashes that are part of the path, so each SEGMENT is
@@ -181,6 +190,8 @@ export function createMdppClient(opts: MdppClientOptions = {}): MdppApiClient {
     updateFibreNode: (id, b) => req("PATCH", `/fibre-nodes/${id}`, b),
     removeFibreNode: (id) => req("DELETE", `/fibre-nodes/${id}`),
     restoreFibreNode: (id) => req("POST", `/fibre-nodes/${id}/restore`),
+
+    me: () => req("GET", "/me"),
 
     async ping() {
       try {
