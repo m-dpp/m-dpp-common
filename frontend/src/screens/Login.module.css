@@ -3,6 +3,11 @@
 .brand { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
 .mark { min-width: 40px; height: 40px; padding: 0 10px; border-radius: 10px; background: var(--mdpp-accent); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; letter-spacing: 0.04em; line-height: 1; white-space: nowrap; }
 .mark img, .mark svg { height: 24px; width: auto; display: block; }
+/* A raster mark is artwork with its own background, so it FILLS the badge rather
+   than sitting on the accent colour with padding around it. Pass an inline SVG
+   instead when you want a glyph tinted onto the accent. */
+.mark:has(img) { padding: 0; background: none; overflow: hidden; }
+.mark:has(img) img { height: 100%; width: 100%; object-fit: cover; }
 .tagline { color: var(--mdpp-muted); font-size: var(--mdpp-fs-sm); }
 .actions { display: flex; flex-direction: column; gap: 8px; }
 .or { display: flex; align-items: center; gap: 10px; color: var(--mdpp-faint); font-size: var(--mdpp-fs-xs); }
