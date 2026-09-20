@@ -123,16 +123,23 @@ class RbacEngine:
                 for role in roles
             )
         if not allowed:
-            # Blaming the role is misleading when the role is only `public`
-            # because the identity never resolved. "Role(s) public not permitted"
-            # reads as a permissions problem to someone who plainly holds the
-            # role — the actual fix is usually to choose an organisation, or to
-            # link the subject in this app. The principal already knows why it
-            # fell back; say so.
+            # Blaming the role is misleading whenever the role is only a
+            # fallback. "Role(s) public not permitted" reads as a permissions
+            # problem to someone who plainly holds the role — the actual fix is
+            # usually to choose an organisation, to link the subject in this
+            # app, or to give the organisation a role HERE as well as in the
+            # other one. The principal already knows why it fell back; say so.
+            #
+            # Keyed on `reason`, not on `anonymous`: the most confusing case of
+            # all — a known subject, a known organisation, but that organisation
+            # holds no role in THIS service — is not anonymous at all.
             detail = f"Role(s) {', '.join(roles)} not permitted to {action} {resource_type}"
-            if principal.get("anonymous") and principal.get("reason"):
+            if principal.get("reason"):
                 detail += f" — {principal['reason']}"
-                if principal.get("organisations"):
+                org = (principal.get("organisation") or {}).get("name")
+                if org:
+                    detail += f" (acting for {org})"
+                if principal.get("anonymous") and principal.get("organisations"):
                     names = ", ".join(o.get("name", "?") for o in principal["organisations"])
                     detail += f" (you may act for: {names})"
             raise HTTPException(status_code=403, detail=detail)
