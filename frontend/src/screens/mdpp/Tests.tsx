@@ -1,0 +1,379 @@
+import { Fragment, useMemo, useState } from "react";
+import { useApi } from "../../api/context";
+import { usePrincipal } from "../../api/principal";
+import { Comparison } from "../../components/Comparison/Comparison";
+import { Button } from "../../design/Button";
+import { Card, CardBody, CardHeader } from "../../design/Card";
+import { Chip, Tag } from "../../design/Chip";
+import { EmptyState } from "../../design/EmptyState";
+import { LabelledInput, LabelledSelect } from "../../design/Field";
+import { Modal } from "../../design/Modal";
+import { Notice } from "../../design/Notice";
+import { Table } from "../../design/Table";
+import { errorMessage, useAsync } from "../../hooks/useAsync";
+import { useMdpp } from "../../mdpp/context";
+import type { AnalysisType, ComparisonResponse, Gs1Level, TestListItem, TestStatus } from "../../mdpp/types";
+import s from "./mdpp.module.css";
+
+const LEVELS: Gs1Level[] = ["model", "variant", "batch", "item"];
+const STATUSES: TestStatus[] = ["requested", "in_progress", "completed", "error"];
+
+const STATUS_TONE: Record<TestStatus, "neutral" | "ok" | "warn" | "error"> = {
+  requested: "neutral",
+  in_progress: "neutral",
+  completed: "ok",
+  error: "error",
+};
+
+export interface TestsProps {
+  /**
+   * Pin the screen to ONE GS1 path — a host with a product in hand passes it;
+   * mdpp-app's own admin leaves it out and gets the searchable list.
+   */
+  pathScope?: string | null;
+  resourceType?: string;
+  /** Hide the section chrome when the host supplies its own heading. */
+  bare?: boolean;
+  /** A note rendered beside each comparison (e.g. "inherited from the variant"). */
+  comparisonNote?: React.ReactNode;
+}
+
+/**
+ * Tests and their results, merged into one screen.
+ *
+ * A test and its result are the same thing at two moments in time, so splitting
+ * them across two screens only makes someone navigate between them. A completed
+ * row expands **in place** into the shared Comparison renderer; a pending or
+ * errored row offers Refresh instead.
+ */
+export function Tests({ pathScope = null, resourceType = "tests", bare = false, comparisonNote }: TestsProps) {
+  const mdpp = useMdpp();
+  const api = useApi();
+  const { can } = usePrincipal();
+
+  const [prefix, setPrefix] = useState("");
+  const [level, setLevel] = useState<Gs1Level | "">("");
+  const [status, setStatus] = useState<TestStatus | "">("");
+  const [lab, setLab] = useState("");
+  const [analysisType, setAnalysisType] = useState<AnalysisType | "">("");
+  const [sort, setSort] = useState<"requested_at" | "-requested_at" | "analysed_at" | "-analysed_at">("-requested_at");
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [registering, setRegistering] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const effectivePrefix = pathScope ?? prefix;
+  const list = useAsync(
+    () =>
+      mdpp.listTests({
+        pathPrefix: effectivePrefix || undefined,
+        level: pathScope ? "" : level,
+        status: status || undefined,
+        laboratoryId: lab || undefined,
+        analysisType: analysisType || undefined,
+        sort,
+      }),
+    [mdpp, effectivePrefix, level, status, lab, analysisType, sort, pathScope],
+  );
+  // labs are organisations with the laboratory role — the filter needs their names
+  const orgs = useAsync(() => api.listOrganisations(), [api]);
+
+  const items = list.data?.items ?? [];
+  const mayWrite = can(resourceType, "create");
+
+  const labs = useMemo(() => (orgs.data ?? []).filter((o) => !o.removed_at), [orgs.data]);
+
+  const refresh = async (t: TestListItem) => {
+    setBusy(t.id);
+    setActionError(null);
+    try {
+      await mdpp.refreshTest(t.gs1_path, t.id);
+      await list.reload();
+    } catch (e) {
+      setActionError(errorMessage(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const filtersActive = prefix || level || status || lab || analysisType || sort !== "-requested_at";
+
+  const body = (
+    <>
+      {!pathScope && (
+        <div className={s.toolbar}>
+          <div className={s.grow}>
+            <LabelledInput
+              label="GS1 path starts with"
+              placeholder="01/08718036001015"
+              value={prefix}
+              onChange={(e) => setPrefix(e.target.value)}
+            />
+          </div>
+          <LabelledSelect label="Level" value={level} onChange={(e) => setLevel(e.target.value as Gs1Level | "")}>
+            <option value="">Any level</option>
+            {LEVELS.map((l) => <option key={l} value={l}>{l}</option>)}
+          </LabelledSelect>
+          <LabelledSelect label="Status" value={status} onChange={(e) => setStatus(e.target.value as TestStatus | "")}>
+            <option value="">Any status</option>
+            {STATUSES.map((x) => <option key={x} value={x}>{x.replace("_", " ")}</option>)}
+          </LabelledSelect>
+          <LabelledSelect label="Laboratory" value={lab} onChange={(e) => setLab(e.target.value)}>
+            <option value="">Any laboratory</option>
+            {labs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </LabelledSelect>
+          <LabelledSelect
+            label="Test type"
+            value={analysisType}
+            onChange={(e) => setAnalysisType(e.target.value as AnalysisType | "")}
+          >
+            <option value="">Any type</option>
+            <option value="in_loco">in-loco</option>
+            <option value="submitted_data">client-submitted</option>
+          </LabelledSelect>
+          <LabelledSelect label="Sort by" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
+            <option value="-requested_at">Requested, newest</option>
+            <option value="requested_at">Requested, oldest</option>
+            <option value="-analysed_at">Result, newest</option>
+            <option value="analysed_at">Result, oldest</option>
+          </LabelledSelect>
+          {filtersActive && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => { setPrefix(""); setLevel(""); setStatus(""); setLab(""); setAnalysisType(""); setSort("-requested_at"); }}
+            >
+              Clear filters
+            </Button>
+          )}
+        </div>
+      )}
+
+      {list.error && <Notice tone="error">{list.error}</Notice>}
+      {actionError && <Notice tone="error">{actionError}</Notice>}
+
+      <Table>
+        <thead>
+          <tr>
+            {!pathScope && <th>GS1 path</th>}
+            {!pathScope && <th>Level</th>}
+            <th>Laboratory</th>
+            <th>Type</th>
+            <th>Ticket</th>
+            <th>Requested</th>
+            <th>Result</th>
+            <th>Status</th>
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {items.length === 0 && (
+            <tr>
+              <td colSpan={pathScope ? 7 : 9}>
+                {list.loading ? (
+                  <EmptyState title="Loading…" />
+                ) : (
+                  <EmptyState
+                    title="No tests"
+                    description={
+                      effectivePrefix
+                        ? "No laboratory test has been registered on this identifier yet."
+                        : "Registered laboratory tests appear here."
+                    }
+                  />
+                )}
+              </td>
+            </tr>
+          )}
+          {items.map((t) => (
+            <Fragment key={t.id}>
+              <tr>
+                {!pathScope && <td><span className={s.path}>{t.gs1_path}</span></td>}
+                {!pathScope && <td>{t.level ? <Tag>{t.level}</Tag> : <span className={s.sub}>—</span>}</td>}
+                <td>{t.laboratory_name ?? t.laboratory_id}</td>
+                <td>
+                  {t.analysis_type
+                    ? <Chip tone={t.analysis_type === "in_loco" ? "neutral" : "warn"}>
+                        {t.analysis_type === "in_loco" ? "in-loco" : "submitted"}
+                      </Chip>
+                    : <span className={s.sub}>—</span>}
+                </td>
+                <td><span className={s.path}>{t.ticket_number}</span></td>
+                <td className={s.sub}>{t.requested_at ? new Date(t.requested_at).toLocaleDateString() : "—"}</td>
+                <td className={s.sub}>{t.analysed_at ? new Date(t.analysed_at).toLocaleDateString() : "—"}</td>
+                <td>
+                  <span className="mdpp-row" style={{ gap: 6 }}>
+                    <Chip tone={STATUS_TONE[t.status]} dot>{t.status.replace("_", " ")}</Chip>
+                    {t.verification_status && t.verification_status !== "verified" && (
+                      <Chip tone="warn">{t.verification_status}</Chip>
+                    )}
+                  </span>
+                  {t.status_message && <div className={s.sub}>{t.status_message}</div>}
+                </td>
+                <td>
+                  {t.status === "completed" ? (
+                    <Button size="sm" variant="ghost" onClick={() => setExpanded(expanded === t.id ? null : t.id)}>
+                      {expanded === t.id ? "Hide results" : "See results"}
+                    </Button>
+                  ) : (
+                    mayWrite && (
+                      <Button size="sm" variant="ghost" disabled={busy === t.id} onClick={() => void refresh(t)}>
+                        {busy === t.id ? "Refreshing…" : "Refresh"}
+                      </Button>
+                    )
+                  )}
+                </td>
+              </tr>
+              {expanded === t.id && (
+                <tr>
+                  <td colSpan={pathScope ? 7 : 9} className={s.expando}>
+                    <ResultPanel test={t} note={comparisonNote} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
+          ))}
+        </tbody>
+      </Table>
+    </>
+  );
+
+  return (
+    <>
+      {bare ? (
+        body
+      ) : (
+        <Card>
+          <CardHeader
+            title="Tests & results"
+            subtitle={
+              pathScope
+                ? `on ${pathScope}`
+                : list.data
+                  ? `${items.length} shown · ${list.data.total} total`
+                  : undefined
+            }
+            actions={mayWrite && pathScope && (
+              <Button size="sm" onClick={() => setRegistering(true)}>Register test here</Button>
+            )}
+          />
+          <CardBody>{body}</CardBody>
+        </Card>
+      )}
+
+      {registering && pathScope && (
+        <RegisterTestModal
+          gs1Path={pathScope}
+          labs={labs}
+          onClose={() => setRegistering(false)}
+          onSaved={() => { setRegistering(false); void list.reload(); }}
+        />
+      )}
+    </>
+  );
+}
+
+// ── the expanded result ──────────────────────────────────────────────────
+
+/**
+ * The comparison for this test's identifier, rendered by the shared component.
+ *
+ * mdpp answers per identifier, so the call returns every comparison on that
+ * path; this narrows to the one test that was expanded. No verdict is computed
+ * here — or anywhere outside mdpp-app.
+ */
+function ResultPanel({ test, note }: { test: TestListItem; note?: React.ReactNode }) {
+  const mdpp = useMdpp();
+  const cmp = useAsync<ComparisonResponse>(() => mdpp.comparison(test.gs1_path), [mdpp, test.gs1_path]);
+
+  if (cmp.loading) return <div className={s.expandoEmpty}>Loading the comparison…</div>;
+  if (cmp.error) return <Notice tone="error">{cmp.error}</Notice>;
+
+  const mine = cmp.data?.comparisons.find((c) => c.test.id === test.id);
+  if (!mine) {
+    return (
+      <div className={s.expandoEmpty}>
+        {test.verification_status && test.verification_status !== "verified" ? (
+          <>
+            This result reports identifier <strong>{test.gs1_path}</strong> as{" "}
+            <strong>{test.verification_status}</strong>, so it is not compared against the
+            declaration — it is evidence about a different identifier.
+          </>
+        ) : (
+          <>There is no declaration on this identifier to compare this result against.</>
+        )}
+      </div>
+    );
+  }
+  return <Comparison comparison={mine} contextNote={note} />;
+}
+
+// ── register ─────────────────────────────────────────────────────────────
+
+function RegisterTestModal({
+  gs1Path,
+  labs,
+  onClose,
+  onSaved,
+}: {
+  gs1Path: string;
+  labs: { id: string; name: string }[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const mdpp = useMdpp();
+  const [laboratoryId, setLaboratoryId] = useState("");
+  const [ticket, setTicket] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await mdpp.registerTest(gs1Path, { laboratory_id: laboratoryId, ticket_number: ticket.trim() });
+      onSaved();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open
+      title="Register a test"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button onClick={save} disabled={saving || !laboratoryId || !ticket.trim()}>
+            {saving ? "Registering…" : "Register test"}
+          </Button>
+        </>
+      }
+    >
+      <div className={s.detailGrid}>
+        <Notice tone="info">
+          Registering a test records <strong>which lab holds which ticket</strong> for this
+          identifier. Results are never entered here — they are pulled from the laboratory with
+          that ticket, which is what makes them evidence rather than a claim.
+        </Notice>
+        <LabelledInput label="GS1 path" value={gs1Path} readOnly />
+        <LabelledSelect label="Laboratory" value={laboratoryId} onChange={(e) => setLaboratoryId(e.target.value)}>
+          <option value="">Select a laboratory…</option>
+          {labs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+        </LabelledSelect>
+        <LabelledInput
+          label="Ticket"
+          placeholder="SIM-OK-0001"
+          value={ticket}
+          onChange={(e) => setTicket(e.target.value)}
+          hint="The lab's own reference. Unique per lab, not globally."
+        />
+        {error && <Notice tone="error">{error}</Notice>}
+      </div>
+    </Modal>
+  );
+}

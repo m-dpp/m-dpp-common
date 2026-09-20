@@ -1,0 +1,30 @@
+/* ── shared bits of the mdpp screens ── */
+.toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.toolbar > * { min-width: 0; }
+.grow { flex: 1 1 220px; }
+.spacer { flex: 1 1 auto; }
+.resultNote { color: var(--mdpp-muted); font-size: var(--mdpp-fs-xs); }
+
+.pathCell { display: flex; flex-direction: column; gap: 1px; }
+.path { font-family: var(--mdpp-mono, ui-monospace, SFMono-Regular, Menlo, monospace); font-size: var(--mdpp-fs-xs); }
+.sub { color: var(--mdpp-muted); font-size: var(--mdpp-fs-xs); }
+.slugs { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* the expanded "See results" panel sits in a full-width row under its test */
+.expando { background: var(--mdpp-surface-2); padding: 14px 12px; }
+.expandoEmpty { color: var(--mdpp-muted); font-size: var(--mdpp-fs-sm); padding: 4px 2px; }
+.comparisonStack { display: flex; flex-direction: column; gap: 18px; }
+
+/* ── composition editor ── */
+.composition { display: flex; flex-direction: column; gap: 8px; }
+.compositionRow { display: grid; grid-template-columns: 1fr 110px auto auto; align-items: center; gap: 8px; }
+.pct { color: var(--mdpp-muted); font-size: var(--mdpp-fs-sm); }
+.compositionFoot { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.total { color: var(--mdpp-muted); font-size: var(--mdpp-fs-xs); display: flex; align-items: center; gap: 6px; }
+
+/* ── detail ── */
+.detailGrid { display: flex; flex-direction: column; gap: 10px; }
+.versionRow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
+              padding: 8px 10px; border: 1px solid var(--mdpp-border-2); border-radius: var(--mdpp-radius); }
+.versionRowCurrent { border-color: var(--mdpp-accent); }
+.scopeNote { display: flex; align-items: center; gap: 8px; font-size: var(--mdpp-fs-xs); color: var(--mdpp-muted); }
