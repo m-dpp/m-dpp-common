@@ -10,12 +10,25 @@ The principal is a plain dict the RBAC engine understands::
       "anonymous": bool,             # True when no organisation could be resolved
       "reason": str | None,          # why the fallback applied (dev diagnostics)
       "subject": {"id", "sub", "email", "display_name"} | None,
-      "organisation": {"id", "name"} | None,
-      "roles": ["economic_operator", ...],   # the organisation's active roles
+      "organisation": {"id", "name"} | None,   # the ACTING organisation
+      "is_org_admin": bool,                    # ...of that one membership
+      "organisations": [{"id", "name", "is_org_admin"}, ...],  # all it may act for
+      "roles": ["economic_operator", ...],   # the acting organisation's active roles
       "role": "economic_operator",           # compat: roles[0] (deprecated)
     }
 
-Authority always comes from the resolved organisation's roles. The single
+**Who you are and who you are acting as are two different things.** The identity
+source answers the first; ``acting_organisation`` answers the second. A subject
+may hold several memberships, and holds exactly ONE organisation's authority at
+a time — ``roles`` is never a union across memberships. Merging them would
+invent a principal that exists in no organisation, able to write in one tenant
+with a role it holds only in another, and would make "on whose behalf was this
+written?" unanswerable afterwards.
+
+``organisations`` lists what the subject *may* act for, so a UI can offer the
+switch and a read can optionally span them. It confers no authority by itself.
+
+Authority always comes from the ACTING organisation's roles. The single
 deliberate constant is the **anonymous role** used when nothing resolves
 (no identity, unknown subject, unlinked subject, or an organisation without an
 active role): ``RBAC_ANONYMOUS_ROLE``, default ``public`` — a floor, never a
@@ -29,6 +42,7 @@ from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from m_dpp_common.auth.acting_organisation import acting_organisation as dev_acting_organisation
 from m_dpp_common.auth.dev_identity import identity as dev_identity
 
 ANONYMOUS_ROLE_ENV = "RBAC_ANONYMOUS_ROLE"
@@ -38,11 +52,13 @@ def anonymous_role() -> str:
     return os.getenv(ANONYMOUS_ROLE_ENV, "public")
 
 
-def _fallback(sub: str | None, role: str, reason: str, *, subject=None) -> dict:
+def _fallback(sub: str | None, role: str, reason: str, *, subject=None, organisations=None) -> dict:
     return {
         "sub": sub,
         "anonymous": True,
         "reason": reason,
+        "is_org_admin": False,
+        "organisations": organisations or [],
         "subject": subject,
         "organisation": None,
         "roles": [role],
@@ -91,6 +107,7 @@ async def resolve_principal(
     organisation_role_model,
     role_model=None,
     anonymous: str | None = None,
+    acting_organisation: str | uuid.UUID | None = None,
 ) -> dict:
     anon = anonymous or anonymous_role()
     if sub is None:
@@ -102,15 +119,54 @@ async def resolve_principal(
     if subject is None:
         return _fallback(sub, anon, "unknown subject")
 
-    membership = (
-        await db.execute(select(Membership).where(Membership.subject_id == subject.id))
-    ).scalar_one_or_none()
-    if membership is None:
+    memberships = list(
+        (
+            await db.execute(
+                select(Membership).where(Membership.subject_id == subject.id)
+            )
+        ).scalars().all()
+    )
+    if not memberships:
         return _fallback(sub, anon, "subject is not linked to an organisation", subject=subject_out(subject))
 
-    org = await db.get(Organisation, membership.organisation_id)
-    if org is None or getattr(org, "removed_at", None) is not None:
-        return _fallback(sub, anon, "linked organisation is missing or removed", subject=subject_out(subject))
+    # Every organisation this subject MAY act for. Offered to the UI as choices;
+    # it grants nothing on its own.
+    orgs_by_id = {}
+    choices = []
+    for m in memberships:
+        o = await db.get(Organisation, m.organisation_id)
+        if o is None or getattr(o, "removed_at", None) is not None:
+            continue
+        orgs_by_id[str(o.id)] = (o, m)
+        choices.append({"id": str(o.id), "name": o.name, "is_org_admin": bool(m.is_org_admin)})
+    if not choices:
+        return _fallback(
+            sub, anon, "linked organisation is missing or removed",
+            subject=subject_out(subject),
+        )
+
+    # Pick the ONE organisation being acted as. An explicit choice must be one
+    # the subject actually holds a membership for — otherwise it is refused
+    # rather than quietly falling back to another, which would silently write on
+    # behalf of an organisation the caller did not name.
+    if acting_organisation is not None:
+        picked = orgs_by_id.get(str(acting_organisation))
+        if picked is None:
+            return _fallback(
+                sub, anon, "not a member of the requested organisation",
+                subject=subject_out(subject), organisations=choices,
+            )
+    else:
+        # No choice made: only unambiguous when there is exactly one membership.
+        # With several, defaulting would make authority depend on row order.
+        if len(choices) > 1:
+            return _fallback(
+                sub, anon, "several organisations available — choose one to act as",
+                subject=subject_out(subject), organisations=choices,
+            )
+        picked = orgs_by_id[choices[0]["id"]]
+
+    org, membership = picked
 
     roles = await organisation_role_names(
         org.id, db, organisation_role_model=organisation_role_model, role_model=role_model
@@ -125,6 +181,8 @@ async def resolve_principal(
         "reason": reason,
         "subject": subject_out(subject),
         "organisation": {"id": str(org.id), "name": org.name},
+        "is_org_admin": bool(membership.is_org_admin),
+        "organisations": choices,
         "roles": roles,
         "role": roles[0],
     }
@@ -139,16 +197,21 @@ def make_get_principal(
     organisation_role_model,
     role_model=None,
     identity=dev_identity,
+    acting=dev_acting_organisation,
     anonymous: str | None = None,
 ):
     """Build the service's ``get_principal`` FastAPI dependency.
 
-    ``identity`` is the identity source (default: the dev header). Replacing it
-    with a JWT-validating dependency is the whole production switch.
+    ``identity`` answers *who* (default: the dev header); replacing it with a
+    JWT-validating dependency is the whole production switch. ``acting`` answers
+    *on whose behalf* — a selector among the subject's own memberships, never a
+    credential.
     """
 
     async def get_principal(
-        sub: str | None = Depends(identity), db: AsyncSession = Depends(get_db)
+        sub: str | None = Depends(identity),
+        acting_org: str | None = Depends(acting),
+        db: AsyncSession = Depends(get_db),
     ) -> dict:
         return await resolve_principal(
             sub,
@@ -159,6 +222,7 @@ def make_get_principal(
             organisation_role_model=organisation_role_model,
             role_model=role_model,
             anonymous=anonymous,
+            acting_organisation=acting_org,
         )
 
     return get_principal

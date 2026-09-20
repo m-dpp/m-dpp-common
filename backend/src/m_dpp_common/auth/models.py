@@ -9,9 +9,24 @@ subclasses, like the organisation and RBAC mixins) and owns the rows::
 - ``subjects`` — one row per known identity. ``sub`` is the OAuth/OIDC subject
   identifier and is unique. Until a real identity provider is wired in,
   subjects are created by hand through the subjects router.
-- ``memberships`` — links a subject to the **one** organisation it represents
-  (``subject_id`` is unique). The organisation's roles are the subject's
-  authority; there are no per-user roles.
+- ``memberships`` — links a subject to an organisation it may act for. A
+  subject may hold **several**: a consultant works for two brands, an analyst
+  covers two labs. Each membership carries that organisation's roles.
+
+  **Roles are never merged across memberships.** A user acts as ONE
+  organisation at a time and holds exactly that organisation's authority;
+  switching context switches everything. Merging would invent a principal that
+  exists in no organisation — able to write in one tenant with a role it only
+  holds in another — and nobody could answer "on whose behalf was this
+  written?" afterwards. The uniqueness that used to enforce one-membership is
+  gone; the *acting* organisation is now chosen explicitly at request time (see
+  ``resolve_principal``).
+
+  ``is_org_admin`` is a capability **of this membership**, not a platform role:
+  it lets the holder manage that one organisation's members and record. It sits
+  here rather than on the organisation's role list because an organisation's
+  roles say what the ORGANISATION is (a lab, an operator), which would apply to
+  every one of its members at once.
 
 Services correspond across apps only through the shared ``sub`` value — never
 through a shared table.
@@ -19,7 +34,7 @@ through a shared table.
 
 import uuid
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
@@ -39,12 +54,19 @@ class MembershipMixin(UUIDPkMixin, TimestampMixin):
 
     @declared_attr.directive
     def __table_args__(cls):
-        # one organisation per subject
-        return (UniqueConstraint("subject_id", name="uq_membership_subject"),)
+        # a subject may belong to several organisations, but only once to each
+        return (
+            UniqueConstraint(
+                "subject_id", "organisation_id", name="uq_membership_subject_organisation"
+            ),
+        )
 
     subject_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("subjects.id", ondelete="CASCADE"), nullable=False, index=True
     )
     organisation_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("organisations.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=True), ForeignKey("organisations.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # may manage THIS organisation's members and record. Scoped to the membership,
+    # never platform-wide — see the note above.
+    is_org_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")

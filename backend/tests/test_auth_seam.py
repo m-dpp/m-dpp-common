@@ -71,14 +71,24 @@ def test_subject_table_shape():
     assert Subject.__table__.columns["sub"].unique
 
 
-def test_membership_links_one_subject_to_one_organisation():
+def test_a_subject_may_belong_to_several_organisations_but_once_to_each():
     assert Membership.__tablename__ == "memberships"
     cols = Membership.__table__.columns
     assert list(cols["subject_id"].foreign_keys)[0].target_fullname == "subjects.id"
     assert list(cols["organisation_id"].foreign_keys)[0].target_fullname == "organisations.id"
     uniques = {c.name: c for c in Membership.__table__.constraints if c.name}
-    assert "uq_membership_subject" in uniques
-    assert [c.name for c in uniques["uq_membership_subject"].columns] == ["subject_id"]
+    # the old single-column uniqueness is gone: several memberships are the point
+    assert "uq_membership_subject" not in uniques
+    assert [c.name for c in uniques["uq_membership_subject_organisation"].columns] == [
+        "subject_id", "organisation_id",
+    ]
+
+
+def test_org_admin_is_a_capability_of_the_membership_not_a_role():
+    """It lives on the link between a subject and ONE organisation, so it cannot
+    leak across tenants the way an organisation-level role would."""
+    assert "is_org_admin" in Membership.__table__.columns
+    assert Membership.__table__.columns["is_org_admin"].default.arg is False
 
 
 def test_no_per_user_roles_anywhere():
@@ -110,6 +120,9 @@ class FakeDb:
         result = MagicMock()
         result.scalar_one_or_none.return_value = payload
         result.all.return_value = payload if isinstance(payload, list) else []
+        scalars = MagicMock()
+        scalars.all.return_value = payload if isinstance(payload, list) else ([] if payload is None else [payload])
+        result.scalars.return_value = scalars
         return result
 
     async def get(self, cls, id_):
@@ -126,7 +139,12 @@ def _resolve(sub, db, **kw):
 
 SUBJECT = SimpleNamespace(id=uuid.uuid4(), sub="alice", email="a@x", display_name="Alice")
 ORG = SimpleNamespace(id=uuid.uuid4(), name="Byborre", removed_at=None)
-MEMBERSHIP = SimpleNamespace(id=uuid.uuid4(), subject_id=SUBJECT.id, organisation_id=ORG.id)
+MEMBERSHIP = SimpleNamespace(id=uuid.uuid4(), subject_id=SUBJECT.id, organisation_id=ORG.id, is_org_admin=False)
+
+ORG2 = SimpleNamespace(id=uuid.uuid4(), name="New Order of Fashion", removed_at=None)
+MEMBERSHIP2 = SimpleNamespace(
+    id=uuid.uuid4(), subject_id=SUBJECT.id, organisation_id=ORG2.id, is_org_admin=True
+)
 
 
 async def test_no_identity_is_anonymous_public():
@@ -150,14 +168,14 @@ async def test_unknown_subject_falls_back():
 
 
 async def test_unlinked_subject_falls_back_but_is_identified():
-    p = await _resolve("alice", FakeDb([SUBJECT, None]))
+    p = await _resolve("alice", FakeDb([SUBJECT, []]))
     assert p["anonymous"] and p["roles"] == ["public"]
     assert p["subject"]["sub"] == "alice" and p["organisation"] is None
     assert "not linked" in p["reason"]
 
 
 async def test_linked_subject_gets_the_organisations_roles():
-    db = FakeDb([SUBJECT, MEMBERSHIP, [("economic_operator",), ("laboratory",)]], rows={ORG.id: ORG})
+    db = FakeDb([SUBJECT, [MEMBERSHIP], [("economic_operator",), ("laboratory",)]], rows={ORG.id: ORG})
     p = await _resolve("alice", db)
     assert p["anonymous"] is False and p["reason"] is None
     assert p["organisation"] == {"id": str(ORG.id), "name": "Byborre"}
@@ -167,7 +185,7 @@ async def test_linked_subject_gets_the_organisations_roles():
 
 
 async def test_organisation_without_roles_gets_the_anonymous_floor():
-    db = FakeDb([SUBJECT, MEMBERSHIP, []], rows={ORG.id: ORG})
+    db = FakeDb([SUBJECT, [MEMBERSHIP], []], rows={ORG.id: ORG})
     p = await _resolve("alice", db)
     assert p["roles"] == ["public"] and p["organisation"] is not None
     assert "no active role" in p["reason"]
@@ -327,3 +345,73 @@ async def test_single_role_string_still_works():
     db = SeqDb(["a"])
     out = await _engine().filter_readable_attrs({"a": 1, "b": 2}, "public", db, entity_type="products")
     assert out == {"b": 2}
+
+
+# ── acting organisation: several memberships, one authority at a time ─────
+
+async def test_one_membership_needs_no_choice():
+    """The common case stays frictionless: with a single membership the acting
+    organisation is implied."""
+    db = FakeDb([SUBJECT, [MEMBERSHIP], [("economic_operator",)]], rows={ORG.id: ORG})
+    p = await _resolve("alice", db)
+    assert p["anonymous"] is False
+    assert p["organisation"]["name"] == "Byborre"
+    assert [o["name"] for o in p["organisations"]] == ["Byborre"]
+
+
+async def test_several_memberships_require_an_explicit_choice():
+    """Defaulting would make authority depend on row order — so it refuses, and
+    says what the choices are."""
+    db = FakeDb([SUBJECT, [MEMBERSHIP, MEMBERSHIP2]], rows={ORG.id: ORG, ORG2.id: ORG2})
+    p = await _resolve("alice", db)
+    assert p["anonymous"] is True
+    assert p["roles"] == ["public"]
+    assert "choose one" in p["reason"]
+    assert {o["name"] for o in p["organisations"]} == {"Byborre", "New Order of Fashion"}
+
+
+async def test_choosing_an_organisation_selects_that_memberships_authority():
+    db = FakeDb(
+        [SUBJECT, [MEMBERSHIP, MEMBERSHIP2], [("economic_operator",)]],
+        rows={ORG.id: ORG, ORG2.id: ORG2},
+    )
+    p = await _resolve("alice", db, acting_organisation=str(ORG2.id))
+    assert p["organisation"] == {"id": str(ORG2.id), "name": "New Order of Fashion"}
+    assert p["roles"] == ["economic_operator"]
+    assert p["is_org_admin"] is True          # from THAT membership
+
+
+async def test_roles_are_never_merged_across_memberships():
+    """The whole point of acting as one organisation: a role held in one tenant
+    must not travel to another. Byborre's membership is not org_admin, so acting
+    as Byborre does not inherit the org_admin held at New Order of Fashion."""
+    db = FakeDb(
+        [SUBJECT, [MEMBERSHIP, MEMBERSHIP2], [("laboratory",)]],
+        rows={ORG.id: ORG, ORG2.id: ORG2},
+    )
+    p = await _resolve("alice", db, acting_organisation=str(ORG.id))
+    assert p["organisation"]["name"] == "Byborre"
+    assert p["roles"] == ["laboratory"]        # only the acting org's roles
+    assert p["is_org_admin"] is False
+
+
+async def test_acting_as_an_organisation_you_do_not_belong_to_is_refused():
+    """A selector, not a credential — naming someone else's organisation drops
+    to anonymous rather than quietly falling back to one you DO hold, which
+    would write on behalf of an organisation you never named."""
+    stranger = uuid.uuid4()
+    db = FakeDb([SUBJECT, [MEMBERSHIP]], rows={ORG.id: ORG})
+    p = await _resolve("alice", db, acting_organisation=str(stranger))
+    assert p["anonymous"] is True
+    assert p["roles"] == ["public"]
+    assert "not a member" in p["reason"]
+
+
+async def test_removed_organisations_are_not_offered_or_acted_as():
+    removed = SimpleNamespace(id=ORG2.id, name="Gone", removed_at="2026-01-01")
+    db = FakeDb([SUBJECT, [MEMBERSHIP, MEMBERSHIP2], [("economic_operator",)]],
+                rows={ORG.id: ORG, ORG2.id: removed})
+    p = await _resolve("alice", db)
+    # only one live membership remains, so no choice is needed
+    assert p["anonymous"] is False
+    assert [o["name"] for o in p["organisations"]] == ["Byborre"]

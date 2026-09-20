@@ -1,5 +1,16 @@
 from m_dpp_common.rbac.admin import make_rbac_router
 from m_dpp_common.rbac.engine import BoundRbac, RbacEngine, as_roles, principal_roles
+from m_dpp_common.rbac.platform import (
+    COMMON_RESOURCE_DEFAULTS,
+    COMMON_RESOURCE_TYPES,
+    FULL,
+    NONE,
+    READ,
+    READ_UPDATE,
+    WRITE,
+    merge_resource_defaults,
+    permissions_checksum,
+)
 from m_dpp_common.rbac.models import (
     ATTR_ORIGIN_DISCOVERED,
     ATTR_ORIGIN_MANUAL,
@@ -23,6 +34,15 @@ __all__ = [
     "RbacEngine",
     "BoundRbac",
     "principal_roles",
+    "COMMON_RESOURCE_TYPES",
+    "COMMON_RESOURCE_DEFAULTS",
+    "merge_resource_defaults",
+    "permissions_checksum",
+    "NONE",
+    "READ",
+    "READ_UPDATE",
+    "WRITE",
+    "FULL",
     "as_roles",
     "RoleMixin",
     "RbacAttributeMixin",

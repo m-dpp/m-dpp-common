@@ -21,7 +21,16 @@ JRC_ROLES: list[tuple[str, str, str]] = [
     ("authority", "Authority", "Regulatory authority — full read access"),
     ("economic_operator", "Economic Operator", "Economic operator — full read/write"),
     ("laboratory", "Laboratory", "Laboratory (e.g. CoE HAN BioCentre)"),
-    ("administrator", "Administrator", "Platform administrator — manages roles, access rules and identities"),
+    # Two levels of administration, deliberately distinct (see DESIGN):
+    #   platform_admin — governs DEFINITIONS: role records, RBAC permission
+    #     matrices, the fibre taxonomy, creating organisations, owner transfer.
+    #     Cross-tenant, outside any tenant.
+    #   administrator  — OPERATES one installation: subjects and memberships,
+    #     seeding and repair. Reads the matrices; may not redefine them.
+    # A tenant holds neither. In particular an operator must never be able to
+    # widen what `public` can see of its own data.
+    ("platform_admin", "Platform Admin", "Governs platform-wide definitions: roles, access rules, the fibre taxonomy, organisations"),
+    ("administrator", "Administrator", "Operates this installation: identities and memberships; reads access rules"),
 ]
 
 # Safe defaults for a role the service's policy does not mention (e.g. one created

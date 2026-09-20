@@ -15,6 +15,10 @@ swap it for a JWT-validating dependency via ``make_get_principal(identity=...)``
 release for services that have not migrated yet.
 """
 
+from m_dpp_common.auth.acting_organisation import (
+    ACTING_ORGANISATION_HEADER,
+    acting_organisation,
+)
 from m_dpp_common.auth.dev_identity import DEV_IDENTITY_HEADER, identity as dev_identity
 from m_dpp_common.auth.dev_role_stub import get_principal  # legacy, deprecated
 from m_dpp_common.auth.models import MembershipMixin, SubjectMixin
@@ -37,6 +41,8 @@ __all__ = [
     "ANONYMOUS_ROLE_ENV",
     "dev_identity",
     "DEV_IDENTITY_HEADER",
+    "acting_organisation",
+    "ACTING_ORGANISATION_HEADER",
     "make_subjects_router",
     "get_principal",
 ]
