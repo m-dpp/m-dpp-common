@@ -16,15 +16,38 @@ full stop — which is why no helper here composes a write scope for you.
 
 from __future__ import annotations
 
+import os
 import uuid
 from typing import Iterable
 
 from sqlalchemy import false, or_, true
 
-#: GS1 paths at model level look like `8013/{gmn}`. Model-level data is the part
-#: of a passport that is public across operators (CIRPASS-2), so tenant scoping
-#: must not hide it.
+#: GS1 paths at model level look like `8013/{gmn}`.
 MODEL_PATH_PREFIX = "8013/"
+
+#: How deep a LISTING goes for a role with no ownership claim.
+#:
+#: Reading ONE identifier is never scoped — a passport must be readable by
+#: whoever holds the product, and confidentiality is the attribute filter's job.
+#: This governs only enumeration, where the two sensible answers differ:
+#:
+#:   "all"    every level across operators. A passport service is
+#:            publish-by-design, and this is what makes the hierarchy browsable
+#:            without an account. The cost is that anyone can enumerate every
+#:            batch and serial of every brand — transparency and competitive
+#:            intelligence are the same query here.
+#:   "model"  model level only. "This passport is public" without "our whole
+#:            catalogue is public".
+#:
+#: Default "all", because a passport that cannot be browsed is a poor
+#: demonstration of one. Set PUBLIC_LISTING_DEPTH=model to tighten it; nothing
+#: else changes, and no code has to move.
+PUBLIC_LISTING_DEPTH_ENV = "PUBLIC_LISTING_DEPTH"
+
+
+def public_listing_depth() -> str:
+    value = os.getenv(PUBLIC_LISTING_DEPTH_ENV, "all").strip().lower()
+    return value if value in {"all", "model"} else "all"
 
 
 def owned_by(column, organisation_id: uuid.UUID | str | None):
@@ -62,23 +85,25 @@ def visible_to_role(
     roles: Iterable[str],
     *,
     oversight_roles: Iterable[str] = ("authority",),
+    depth: str | None = None,
 ):
-    """What a role may read regardless of ownership.
+    """What a role may LIST regardless of ownership.
 
-    - an oversight role (`authority`) reads across tenants: that is the point of
-      market surveillance, and a regulator that could only see what it owned
-      would see nothing;
-    - everyone else, including `public`, reads **model-level** data across
-      tenants and nothing deeper.
+    - an oversight role (`authority`) always reads across tenants: that is the
+      point of market surveillance, and a regulator that could only see what it
+      owned would see nothing;
+    - everyone else sees as deep as `PUBLIC_LISTING_DEPTH` allows — every level
+      by default, model level only when tightened.
 
-    Returns `None` when the role grants no cross-tenant read at all, so a caller
-    can tell "no extra visibility" from "visibility that happens to match
-    nothing".
+    Never returns `None`: some cross-tenant read always exists, because a
+    passport nobody can find is not a passport.
     """
     role_set = set(roles)
     if role_set & set(oversight_roles):
         return true()
-    return model_level(path_column)
+    if (depth or public_listing_depth()) == "model":
+        return model_level(path_column)
+    return true()
 
 
 def readable(path_column, owner_column, *, organisation_ids, roles, oversight_roles=("authority",)):

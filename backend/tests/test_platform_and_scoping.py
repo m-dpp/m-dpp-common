@@ -15,7 +15,14 @@ from m_dpp_common.rbac import (
     permissions_checksum,
     platform_definition_checksum,
 )
-from m_dpp_common.scoping import model_level, owned_by, owned_by_any, readable, visible_to_role
+from m_dpp_common.scoping import (
+    model_level,
+    owned_by,
+    owned_by_any,
+    public_listing_depth,
+    readable,
+    visible_to_role,
+)
 
 
 class Base(DeclarativeBase):
@@ -129,10 +136,31 @@ def test_model_level_is_derived_from_the_path_shape():
     assert "8013/" in _sql(model_level(Row.gs1_path))
 
 
-def test_public_sees_model_level_across_tenants_and_nothing_deeper():
-    clause = visible_to_role(Row.gs1_path, ["public"])
-    sql = _sql(clause)
+def test_by_default_a_listing_spans_every_level():
+    """A passport that cannot be browsed is a poor demonstration of one, so the
+    default is full depth — reading one identifier was never scoped anyway."""
+    assert _sql(visible_to_role(Row.gs1_path, ["public"])) == "true"
+
+
+def test_the_depth_can_be_tightened_to_model_level():
+    """"This passport is public" without "our whole catalogue is public"."""
+    sql = _sql(visible_to_role(Row.gs1_path, ["public"], depth="model"))
     assert "8013/" in sql and sql != "true"
+
+
+def test_the_depth_setting_is_read_from_the_environment(monkeypatch):
+    monkeypatch.setenv("PUBLIC_LISTING_DEPTH", "model")
+    assert public_listing_depth() == "model"
+    assert _sql(visible_to_role(Row.gs1_path, ["public"])) != "true"
+    # anything unrecognised falls back to the permissive default rather than
+    # silently hiding data
+    monkeypatch.setenv("PUBLIC_LISTING_DEPTH", "nonsense")
+    assert public_listing_depth() == "all"
+
+
+def test_tightening_the_depth_never_restricts_an_authority(monkeypatch):
+    monkeypatch.setenv("PUBLIC_LISTING_DEPTH", "model")
+    assert _sql(visible_to_role(Row.gs1_path, ["authority"])) == "true"
 
 
 def test_an_authority_reads_across_tenants():
@@ -140,9 +168,10 @@ def test_an_authority_reads_across_tenants():
     assert _sql(visible_to_role(Row.gs1_path, ["authority"])) == "true"
 
 
-def test_a_read_is_what_you_own_or_what_your_role_allows():
+def test_a_read_is_what_you_own_or_what_your_role_allows(monkeypatch):
+    monkeypatch.setenv("PUBLIC_LISTING_DEPTH", "model")
     org = uuid.uuid4()
     sql = _sql(readable(Row.gs1_path, Row.operator_id, organisation_ids=[org], roles=["public"]))
     assert org.hex in sql           # your own rows (rendered without hyphens)
-    assert "8013/" in sql           # plus public model-level
+    assert "8013/" in sql           # plus what the role may see
     assert " OR " in sql

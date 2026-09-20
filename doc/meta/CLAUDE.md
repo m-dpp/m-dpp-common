@@ -159,7 +159,10 @@ entity-agnostic.
   definition both apps seed from; `platform_definition_checksum` is the cross-app comparable digest
   (the per-app `permissions_checksum` is expected to differ and cannot reveal drift).
 - 2026-09-20 (0.11.0): `scoping.py` names the three scopes — owned / visible-to-role / produced.
-  Owning nothing matches NOTHING, never everything.
+  Owning nothing matches NOTHING, never everything. Listing depth for a caller with no ownership
+  claim is `PUBLIC_LISTING_DEPTH` (`all` | `model`, default `all`); an oversight role ignores it,
+  and an unrecognised value falls back to the permissive default so a config typo cannot silently
+  hide data.
 - This resolves the open question "one organisation per user, or several": several.
 - (Append new mdpp-common decisions here.)
 
