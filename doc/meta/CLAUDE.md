@@ -126,6 +126,22 @@ entity-agnostic.
 - 2026-09-19 (0.10.1): AttrsEditor leaf type `image` (image link). The value stays a plain URL
   string in `attrs` (no wrapper object, no schema); it is recognised by extension or
   `data:image` URI and rendered as a thumbnail. Only http(s)/data:image sources go into `<img>`.
+- 2026-09-20 (0.11.0): the project-information banner is shared (`ProjectBanner` +
+  `MDPP_PROJECT`); an app passes at most ONE app-specific line (`appNote`). dpp-app's local
+  copy was deleted, not duplicated.
+- 2026-09-20 (0.11.0): `src/mdpp/` is the one way any front-end reaches an mdpp-app instance —
+  provider + typed client, base path RELATIVE (default `/mdpp-api`, never host:port) so the host
+  proxies it and stays same-origin. It reuses the shared `identityStore`, so acting-as switches
+  both APIs at once. No app-specific logic: no hierarchy, no chain walking, no verdict.
+- 2026-09-20 (0.11.0): `Comparison` RENDERS mdpp's comparison object and computes nothing —
+  that is what stops two front-ends drifting on how a verdict is shown. `within: null` (no
+  tolerance anywhere in the fibre's chain) renders neutral, never as a pass; the specificity
+  sentence is printed as given, never recomposed. The wire type is `TestComparison` so it does
+  not collide with the component name.
+- 2026-09-20 (0.11.0): `Declarations` / `Tests` take an optional `pathScope`. Scoping HIDES the
+  search controls rather than pre-filling them — the identifier is not the user's to change when
+  a host pinned it. Tests and results are one screen (same thing at two moments); composition is
+  edited as fibre + percentage rows, never raw JSON, and the 100% total is shown but not enforced.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions

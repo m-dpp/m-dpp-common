@@ -195,6 +195,74 @@ Example value the editor round-trips (nesting, list of mixed items, a date, a nu
 
 `attrsPatch(original, next)` (in `src/components/attrsPatch.ts`) turns two objects into the PATCH body the backends expect (changed keys set, removed keys `null`).
 
+### The project banner (`src/components/ProjectBanner`)
+
+The Overview banner, written once instead of once per app: project description, the three services, consortium partners, funding, contact, contributors, standards referenced and documentation links.
+
+```tsx
+<ProjectBanner currentService="dpp-app" appNote="This is dpp-app, the reference passport…" />
+<ProjectBanner config={myConfig} currentService="mdpp-app" />   // or supply your own
+```
+
+`MDPP_PROJECT` is the shared content and the default; `ProjectConfig` is its shape. `currentService` matches a `services[].key` and marks that card "you are here". `appNote` is the **one** app-specific line an app may add under the description — keep it to a sentence.
+
+---
+
+## The mdpp connection (`src/mdpp`)
+
+The single way any front-end talks to an **mdpp-app** instance. dpp-app's Molecular tab, mdpp-app's own admin and (later) passport-app all go through this; it contains no app-specific logic — no hierarchy, no chain walking, and no verdict.
+
+```tsx
+<MdppProvider enabled={MDPP_ENABLED} baseUrl="/mdpp-api">…</MdppProvider>
+
+const mdpp = useMdpp();                    // throws when not enabled — call under a guard
+const enabled = useMdppEnabled();
+const conn = useMdppConnection();          // { enabled, baseUrl, client } | null
+```
+
+The base path is **relative** (default `/mdpp-api`), never a host and port: the host app proxies it so everything stays same-origin and no CORS is involved, exactly as `/api` does for its own backend. Identity travels the same way as on the dpp client — both read the shared `identityStore` — so switching "acting as" switches it for both APIs at once.
+
+The client covers declarations (list by prefix/level, current, history, new version, withdraw), tests (list with filters, register with `lab_id` + `ticket`, refresh, result, withdraw), the **comparison** endpoint, batched per-path **counts** for tree annotations, and the fibre taxonomy for the composition picker. `comparisons(paths)` is one request per identifier — mdpp is flat and answers about exactly one — with a path that has nothing on it resolving to `null` rather than rejecting the batch.
+
+### The Comparison renderer (`src/components/Comparison`)
+
+```tsx
+<Comparison comparison={cmp} contextNote={<Chip tone="warn">on the variant</Chip>} />
+```
+
+Renders **one test versus one declaration**, exactly as mdpp-app computed it. It **computes nothing**: every verdict, sentence, tolerance and flag on screen is a field of the object mdpp-app returned, which is what stops the apps drifting in how a verdict is shown — there is nothing for them to drift about.
+
+Its input is one entry of `ComparisonResponse.comparisons` (`TestComparison`):
+
+| field | what it holds |
+|---|---|
+| `test` | verification status, analysis type (`in_loco` / `submitted_data`), method, lab, ticket, dates |
+| `declaration` | the version this test was compared against, plus `at_test_time` — `true` when it is the version that was current when the test was requested (the default), `false` when a caller forced one |
+| `rows[]` | one per declared component, plus `undeclared` rows for tested fibres nobody declared and `not_found` rows for declared fibres the test did not find |
+| `flags[]` | neutral footer notes (quantity outside tolerance, undeclared fibre, client-submitted data) |
+
+Each `matched` row carries the three independent verdicts:
+
+- **`official`** — `complies` / `off`, with the legal fibre name (EU 1007/2011) each side resolved to. `off` is reachable even inside the declared subtree, when a legal-name flag sits between the two nodes.
+- **`specificity`** — `relationship` (`same`, `tested_is_descendant`, `tested_is_ancestor`, `same_official_other_branch`), the two nodes, and a generated `sentence`. **Render the sentence; do not compose your own.**
+- **`quantity`** — `difference` (tested − declared, signed percentage points), the `tolerance` applied, the node it was `tolerance_from` / `tolerance_inherited`, and `within`. **`within: null` means no tolerance is defined anywhere in the fibre's chain — unknown, which is not a pass, and must not render as one.**
+
+Wording is neutral throughout: a row is "flagged for review", never an accusation.
+
+### Declarations and Tests screens (`src/screens/mdpp`)
+
+```tsx
+<Declarations />                              // mdpp-app's admin: searchable across identifiers
+<Declarations pathScope="01/0871…/10/LOT-1" /> // dpp-app: pinned to one product
+<Tests pathScope={path} bare comparisonNote={…} />
+```
+
+Both take an optional **`pathScope`**. A host with a product in hand pins them to one GS1 path; an admin leaves it out and gets the searchable list. Scoping **hides** the search controls rather than pre-filling them — the identifier is not the user's to change there.
+
+**Declarations** filters by path prefix and level, and writes a new version through a fibre + percentage row editor (`CompositionEditor`) that names fibres from the taxonomy, never raw JSON. It shows the percentage total but does not enforce 100: compositions legitimately fall short (unlisted trims), and refusing to record what someone actually declares would make the passport less truthful, not more.
+
+**Tests & results** is deliberately one screen — a test and its result are the same thing at two moments in time. Filters: path prefix, level, status, laboratory, test type; sorting by request or result date. A completed row expands **in place** into `<Comparison>`; a pending or errored row offers **Refresh**. Registering a test takes only `lab_id` + `ticket`.
+
 ---
 
 ## Versioning
