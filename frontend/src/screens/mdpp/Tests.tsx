@@ -61,6 +61,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
   const [registering, setRegistering] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [withdrawing, setWithdrawing] = useState<TestListItem | null>(null);
 
   const effectivePrefix = pathScope ?? prefix;
   const list = useAsync(
@@ -96,6 +97,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
 
   const items = list.data?.items ?? [];
   const mayWrite = can(resourceType, "create");
+  const mayWithdraw = can(resourceType, "delete");
 
   const refresh = async (t: TestListItem) => {
     setBusy(t.id);
@@ -249,6 +251,20 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
                       </Button>
                     )
                   )}
+                  {/* A test registered against the wrong ticket is polling a
+                      result that was never about this product. Withdrawing is
+                      how that is corrected — the row is kept, it just stops
+                      counting as evidence. */}
+                  {mayWithdraw && !t.withdrawn_at && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      title="Withdraw this test"
+                      onClick={() => setWithdrawing(t)}
+                    >
+                      Withdraw
+                    </Button>
+                  )}
                 </td>
               </tr>
               {expanded === t.id && (
@@ -288,6 +304,14 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
           />
           <CardBody>{body}</CardBody>
         </Card>
+      )}
+
+      {withdrawing && (
+        <WithdrawTestModal
+          test={withdrawing}
+          onClose={() => setWithdrawing(null)}
+          onDone={async () => { setWithdrawing(null); await list.reload(); }}
+        />
       )}
 
       {registering && (
@@ -335,6 +359,84 @@ function ResultPanel({ test, note }: { test: TestListItem; note?: React.ReactNod
     );
   }
   return <Comparison comparison={mine} contextNote={note} />;
+}
+
+// ── withdraw ─────────────────────────────────────────────────────────────
+
+/**
+ * Withdrawing a test — the correction for "that was the wrong ticket".
+ *
+ * It is a **soft delete**: the row and any result already pulled are kept, and
+ * simply stop being live evidence. Deleting outright would erase the fact that
+ * a test was once registered and compared, which is the sort of thing a
+ * passport exists to remember; a withdrawn test can also be explained, which a
+ * missing one cannot.
+ */
+function WithdrawTestModal({
+  test,
+  onClose,
+  onDone,
+}: {
+  test: TestListItem;
+  onClose: () => void;
+  onDone: () => Promise<void>;
+}) {
+  const mdpp = useMdpp();
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    setBusy(true);
+    setErr(null);
+    try {
+      await mdpp.withdrawTest(test.gs1_path, test.id, reason.trim() || undefined);
+      await onDone();
+    } catch (e) {
+      setErr(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      title="Withdraw this test"
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="danger" disabled={busy} onClick={submit}>
+            {busy ? "Withdrawing…" : "Withdraw test"}
+          </Button>
+        </>
+      }
+    >
+      <div className={s.detailGrid}>
+        <Notice tone="info">
+          The test and any result it pulled are <strong>kept</strong> — they stop counting as
+          evidence and disappear from comparisons, but the record that a test was registered
+          remains. A withdrawn test can be explained; a deleted one cannot.
+        </Notice>
+        <div className={s.versionRow}>
+          <span>
+            <strong>{test.ticket_number}</strong>
+            <span className={s.sub}> at {test.laboratory_name ?? test.laboratory_id}</span>
+          </span>
+          <Chip tone={test.status === "completed" ? "ok" : "neutral"}>{test.status.replace("_", " ")}</Chip>
+        </div>
+        <LabelledInput
+          label="Reason"
+          placeholder="wrong ticket"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          hint="Optional, and worth writing: “wrong ticket” and “sample lost” are different facts."
+        />
+        {err && <Notice tone="error">{err}</Notice>}
+      </div>
+    </Modal>
+  );
 }
 
 // ── register ─────────────────────────────────────────────────────────────

@@ -66,7 +66,10 @@ export interface MdppApiClient {
   registerTest(gs1Path: string, body: TestRegister): Promise<unknown>;
   refreshTest(gs1Path: string, testId: string): Promise<unknown>;
   getTestResult(gs1Path: string, testId: string): Promise<unknown>;
-  withdrawTest(gs1Path: string, testId: string): Promise<unknown>;
+  /** Withdraw a test — a SOFT delete. The row and any result it pulled are kept
+   *  for the record; they simply stop being live evidence. `reason` is worth
+   *  supplying: "wrong ticket" and "sample lost" are different facts. */
+  withdrawTest(gs1Path: string, testId: string, reason?: string): Promise<unknown>;
 
   // the comparison — one identifier per call, by design
   comparison(gs1Path: string, opts?: { declarationVersion?: number }): Promise<ComparisonResponse>;
@@ -172,7 +175,8 @@ export function createMdppClient(opts: MdppClientOptions = {}): MdppApiClient {
     registerTest: (p, body) => req("POST", `/${encodePath(p)}/tests`, body),
     refreshTest: (p, id) => req("POST", `/${encodePath(p)}/tests/${id}/refresh`),
     getTestResult: (p, id) => req("GET", `/${encodePath(p)}/tests/${id}/result`),
-    withdrawTest: (p, id) => req("DELETE", `/${encodePath(p)}/tests/${id}`),
+    withdrawTest: (p, id, reason) =>
+      req("DELETE", `/${encodePath(p)}/tests/${id}${queryString({ reason })}`),
 
     comparison: (p, o = {}) =>
       req("GET", `/${encodePath(p)}/comparison${queryString({ declaration_version: o.declarationVersion })}`),
