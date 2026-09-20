@@ -38,20 +38,34 @@ COMMON_RESOURCE_TYPES: list[str] = ["organisations", "rbac", "subjects"]
 #: matrices could widen what `public` sees of its own data, which is exactly the
 #: thing tenancy is meant to prevent.
 #:
-#: `organisations` is "shared in existence, private in detail": everyone may LIST
-#: them (an operator must find a laboratory; a lab must see who requested a
-#: test), but editing one is its own `org_admin`'s business — a per-row check the
-#: resource gate cannot express, so the routes apply it on top of `can_update`.
+#: `organisations` is "shared in existence, private in detail": every role may
+#: LIST and READ them — an operator must find a laboratory, a lab must see who
+#: requested a test — but **only `platform_admin` may change one**. Creating an
+#: organisation and editing its record are the same kind of act: they decide who
+#: exists in this system and what they are called, which is platform governance
+#: rather than tenant business.
+#:
+#: This is stricter than an earlier draft that let each organisation's
+#: `org_admin` edit its own record. That per-row exception was never
+#: implemented, so nothing loses a capability it had — but two consequences are
+#: real and deliberate:
+#:
+#:   * a **laboratory cannot maintain its own** `lab_results_endpoint`, which
+#:     lives in its organisation's attrs. The platform operator maintains it.
+#:   * an **economic operator cannot correct its own** name or GLN.
+#:
+#: Both are recoverable by asking an administrator, which is the trade for
+#: nobody being able to quietly rename themselves.
 COMMON_RESOURCE_DEFAULTS: dict[str, dict] = {
     "platform_admin":            {"organisations": FULL, "rbac": FULL, "subjects": FULL},
-    "administrator":             {"organisations": READ_UPDATE, "rbac": READ, "subjects": FULL},
+    "administrator":             {"organisations": READ, "rbac": READ, "subjects": FULL},
     "public":                    {"organisations": READ, "rbac": NONE, "subjects": NONE},
     "end_user_professional":     {"organisations": READ, "rbac": NONE, "subjects": NONE},
     "recycler":                  {"organisations": READ, "rbac": NONE, "subjects": NONE},
-    "supply_chain_professional": {"organisations": READ_UPDATE, "rbac": NONE, "subjects": NONE},
+    "supply_chain_professional": {"organisations": READ, "rbac": NONE, "subjects": NONE},
     "authority":                 {"organisations": READ, "rbac": READ, "subjects": NONE},
-    "economic_operator":         {"organisations": READ_UPDATE, "rbac": NONE, "subjects": NONE},
-    "laboratory":                {"organisations": READ_UPDATE, "rbac": NONE, "subjects": NONE},
+    "economic_operator":         {"organisations": READ, "rbac": NONE, "subjects": NONE},
+    "laboratory":                {"organisations": READ, "rbac": NONE, "subjects": NONE},
 }
 
 

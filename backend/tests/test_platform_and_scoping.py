@@ -58,6 +58,18 @@ def test_administrator_operates_but_does_not_define():
     assert admin["rbac"]["can_update"] is False         # cannot redefine them
 
 
+def test_only_platform_admin_may_change_an_organisation():
+    """Creating an organisation and editing its record are the same kind of act:
+    they decide who exists in this system and what they are called. That is
+    platform governance, not tenant business — nobody renames themselves."""
+    for role, per_resource in COMMON_RESOURCE_DEFAULTS.items():
+        org = per_resource["organisations"]
+        expected = role == "platform_admin"
+        assert org["can_update"] is expected, role
+        assert org["can_create"] is expected, role
+        assert org["can_delete"] is expected, role
+
+
 def test_every_role_can_at_least_list_organisations():
     """Shared in existence: an operator must be able to find a laboratory, and a
     lab must see who requested a test."""
