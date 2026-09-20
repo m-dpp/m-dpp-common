@@ -74,9 +74,9 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
       }),
     [mdpp, effectivePrefix, level, status, lab, analysisType, sort, pathScope],
   );
-  // Only organisations holding `laboratory`: a test names the lab that ran it,
-  // and the backend refuses any other, so offering one is offering a 422.
-  const { organisations: labs } = useOrganisationsWithRole("laboratory");
+  // Only organisations holding `laboratory`, AS MDPP KNOWS THEM: `laboratory_id`
+  // is a foreign key in mdpp's table, and the host app's ids are different rows.
+  const { organisations: labs } = useOrganisationsWithRole("laboratory", mdpp);
 
   const items = list.data?.items ?? [];
   const mayWrite = can(resourceType, "create");
@@ -328,9 +328,10 @@ export interface RegisterTestProps {
  * them per level) mounts this instead of a second copy of the table.
  */
 export function RegisterTest({ gs1Path, onRegistered, label = "Register test here", resourceType = "tests" }: RegisterTestProps) {
+  const mdpp = useMdpp();
   const { can } = usePrincipal();
   const [open, setOpen] = useState(false);
-  const { organisations: labs } = useOrganisationsWithRole("laboratory");
+  const { organisations: labs } = useOrganisationsWithRole("laboratory", mdpp);
   if (!can(resourceType, "create")) return null;
   return (
     <>

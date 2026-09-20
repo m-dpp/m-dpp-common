@@ -1,7 +1,14 @@
 import { useMemo } from "react";
 import { useApi } from "../api/context";
-import type { Organisation } from "../api/types";
+import type { Organisation, OrganisationRole } from "../api/types";
 import { useAsync } from "./useAsync";
+
+/** The two calls this hook needs — satisfied by the dpp client and the mdpp one
+ *  alike, so a caller picks WHICH SERVICE the organisations come from. */
+export interface OrganisationSource {
+  listOrganisations(opts?: { includeRemoved?: boolean }): Promise<Organisation[]>;
+  listOrganisationRoles(): Promise<OrganisationRole[]>;
+}
 
 /**
  * Live organisations holding a given role — for pickers that should only offer
@@ -12,14 +19,21 @@ import { useAsync } from "./useAsync";
  * are data, not a hardcoded list, so the filter follows whatever roles are
  * actually assigned rather than a name baked into the UI.
  *
- * Pass `null` to get every live organisation, so a caller can keep one code path.
+ * **`source` decides which service answers, and it matters.** Each app keeps its
+ * own organisation table with its own UUIDs, so a picker whose value becomes a
+ * foreign key in service B must list service B's organisations. Defaults to the
+ * host's own API, which is right whenever the value stays in the host.
+ *
+ * Pass `role: null` to get every live organisation, so a caller can keep one
+ * code path.
  */
-export function useOrganisationsWithRole(role: string | null): {
+export function useOrganisationsWithRole(role: string | null, source?: OrganisationSource): {
   organisations: Organisation[];
   loading: boolean;
   error: string | null;
 } {
-  const api = useApi();
+  const hostApi = useApi();
+  const api: OrganisationSource = source ?? hostApi;
   const orgs = useAsync(() => api.listOrganisations(), [api]);
   // open endpoint: role assignments are readable so the UI can filter on them
   const assignments = useAsync(() => (role ? api.listOrganisationRoles() : Promise.resolve([])), [api, role]);

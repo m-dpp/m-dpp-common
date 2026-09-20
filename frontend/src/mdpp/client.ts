@@ -19,6 +19,7 @@
  */
 
 import { DEFAULT_IDENTITY_HEADER, queryString, requestJson } from "../api/client";
+import type { Organisation, OrganisationRole } from "../api/types";
 import { identityStore } from "../api/identity";
 import type {
   ComparisonResponse,
@@ -93,6 +94,17 @@ export interface MdppApiClient {
    * ask rather than assume its own answer carries over.
    */
   me(): Promise<MdppPrincipal>;
+
+  /**
+   * Organisations **as mdpp knows them**, with their role assignments.
+   *
+   * Not the host app's. Anything that becomes an mdpp foreign key —
+   * `laboratory_id` on a test — must be an id mdpp issued. The two services keep
+   * separate organisation tables with separate UUIDs, so offering the host's
+   * list produces "no organisation '<uuid>'" at the moment of writing.
+   */
+  listOrganisations(): Promise<Organisation[]>;
+  listOrganisationRoles(): Promise<OrganisationRole[]>;
 }
 
 /** GS1 paths contain slashes that are part of the path, so each SEGMENT is
@@ -197,6 +209,12 @@ export function createMdppClient(opts: MdppClientOptions = {}): MdppApiClient {
     restoreFibreNode: (id) => req("POST", `/fibre-nodes/${id}/restore`),
 
     me: () => req("GET", "/me"),
+
+    async listOrganisations() {
+      const body = await req<{ "@graph"?: Organisation[] } | Organisation[]>("GET", "/organisations");
+      return Array.isArray(body) ? body : body["@graph"] ?? [];
+    },
+    listOrganisationRoles: () => req("GET", "/admin/rbac/organisation-roles"),
 
     async ping() {
       try {
