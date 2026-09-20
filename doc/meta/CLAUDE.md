@@ -142,6 +142,10 @@ entity-agnostic.
   search controls rather than pre-filling them — the identifier is not the user's to change when
   a host pinned it. Tests and results are one screen (same thing at two moments); composition is
   edited as fibre + percentage rows, never raw JSON, and the 100% total is shown but not enforced.
+- 2026-09-20 (0.11.0): `FibreTaxonomy` screen. The taxonomy is not a side screen — `legal_name`
+  and `tolerance` are the two comparison inputs defined there, so both are shown RESOLVED
+  (effective tolerance badged on the tree, dimmed when inherited, with the ancestor named), and a
+  node with no tolerance in its chain says so rather than looking like a pass.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions

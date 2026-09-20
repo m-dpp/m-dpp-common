@@ -263,6 +263,21 @@ Both take an optional **`pathScope`**. A host with a product in hand pins them t
 
 **Tests & results** is deliberately one screen — a test and its result are the same thing at two moments in time. Filters: path prefix, level, status, laboratory, test type; sorting by request or result date. A completed row expands **in place** into `<Comparison>`; a pending or errored row offers **Refresh**. Registering a test takes only `lab_id` + `ticket`.
 
+### The fibre taxonomy screen (`src/screens/mdpp/FibreTaxonomy.tsx`)
+
+```tsx
+<FibreTaxonomy />
+```
+
+The composition hierarchy declarations and results are expressed in — and the place two inputs to the comparison are **defined**:
+
+- **`legal_name`** marks a legally-binding fibre name (EU 1007/2011). The official-fibre verdict resolves to the nearest ancestor-or-self carrying it, which is why merino and rambouillet both come out as *wool*.
+- **`tolerance`** (an attribute, absolute percentage points) is what every quantity verdict is measured against, inherited **nearest ancestor-or-self wins**.
+
+Both are shown **resolved**: the tree badges each node's effective tolerance and dims it when inherited; the detail names the ancestor it came from. A node with no tolerance anywhere in its chain says so, because that makes its quantity verdicts read *unknown* rather than *within*.
+
+> Registering an attribute is not enough to edit it — each key needs a permission row per role, and the default is readable-but-not-writable. A host that wants `tolerance` edited must grant write on it (see mdpp-app's seed).
+
 ---
 
 ## Versioning
