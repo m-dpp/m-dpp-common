@@ -13,6 +13,7 @@ from m_dpp_common.rbac import (
     READ,
     merge_resource_defaults,
     permissions_checksum,
+    platform_definition_checksum,
 )
 from m_dpp_common.scoping import model_level, owned_by, owned_by_any, readable, visible_to_role
 
@@ -80,6 +81,35 @@ def test_checksum_is_stable_under_reordering_but_moves_on_a_real_change():
 
     widened = merge_resource_defaults(COMMON_RESOURCE_DEFAULTS, {"public": {"rbac": READ}})
     assert permissions_checksum(COMMON_RESOURCE_TYPES, widened) != a
+
+
+def test_the_comparable_checksum_ignores_each_apps_own_entities():
+    """Two apps must be able to compare platform definitions. A digest that
+    covered `products` here and `declarations` there would always differ, and
+    would therefore tell a reader nothing."""
+    roles = sorted(COMMON_RESOURCE_DEFAULTS)
+    dpp = merge_resource_defaults(COMMON_RESOURCE_DEFAULTS, {"economic_operator": {"products": FULL}})
+    mdpp = merge_resource_defaults(COMMON_RESOURCE_DEFAULTS, {"economic_operator": {"declarations": FULL}})
+    assert platform_definition_checksum(roles, dpp) == platform_definition_checksum(roles, mdpp)
+    # ...while the per-app digests are expected to differ
+    assert permissions_checksum(["products"], dpp) != permissions_checksum(["declarations"], mdpp)
+
+
+def test_the_comparable_checksum_moves_when_a_shared_rule_drifts():
+    """The case the safeguard exists for: someone widens a permission in one app
+    and forgets the other."""
+    roles = sorted(COMMON_RESOURCE_DEFAULTS)
+    before = platform_definition_checksum(roles, COMMON_RESOURCE_DEFAULTS)
+    drifted = merge_resource_defaults(COMMON_RESOURCE_DEFAULTS, {"public": {"subjects": READ}})
+    assert platform_definition_checksum(roles, drifted) != before
+
+
+def test_the_comparable_checksum_moves_when_a_role_is_added_in_one_app_only():
+    roles = sorted(COMMON_RESOURCE_DEFAULTS)
+    assert (
+        platform_definition_checksum(roles + ["auditor"], COMMON_RESOURCE_DEFAULTS)
+        != platform_definition_checksum(roles, COMMON_RESOURCE_DEFAULTS)
+    )
 
 
 # ── the three scopes ─────────────────────────────────────────────────────

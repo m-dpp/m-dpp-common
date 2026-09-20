@@ -10,6 +10,7 @@ from m_dpp_common.rbac.platform import (
     WRITE,
     merge_resource_defaults,
     permissions_checksum,
+    platform_definition_checksum,
 )
 from m_dpp_common.rbac.models import (
     ATTR_ORIGIN_DISCOVERED,
@@ -38,6 +39,7 @@ __all__ = [
     "COMMON_RESOURCE_DEFAULTS",
     "merge_resource_defaults",
     "permissions_checksum",
+    "platform_definition_checksum",
     "NONE",
     "READ",
     "READ_UPDATE",

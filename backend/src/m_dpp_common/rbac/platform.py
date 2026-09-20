@@ -69,11 +69,12 @@ def merge_resource_defaults(*layers: dict[str, dict]) -> dict[str, dict]:
 
 
 def permissions_checksum(resource_types: list[str], resource_defaults: dict[str, dict]) -> str:
-    """A short, stable digest of a policy — §4.5's second safeguard.
+    """A short, stable digest of ONE app's whole policy.
 
-    Shown on each app's About screen. Two installations displaying the same
-    digest started from the same definition; different digests mean the policies
-    have diverged and someone must reconcile them by hand.
+    Useful for noticing that an installation's policy changed, but **not** for
+    comparing two apps: each covers its own entities (`products` here,
+    `declarations` there), so the digests are meant to differ. To compare apps,
+    use `platform_definition_checksum`.
 
     Order-independent by construction, so formatting or reordering the table
     does not read as a change.
@@ -84,6 +85,37 @@ def permissions_checksum(resource_types: list[str], resource_defaults: dict[str,
             role: {rt: {k: bool(v) for k, v in sorted(perms.items())}
                    for rt, perms in sorted(per_resource.items())}
             for role, per_resource in sorted(resource_defaults.items())
+        },
+    }
+    blob = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(blob).hexdigest()[:12]
+
+
+def platform_definition_checksum(
+    role_names: list[str], resource_defaults: dict[str, dict]
+) -> str:
+    """The digest that is **comparable between apps** — §4.5's second safeguard.
+
+    Covers only what is platform-wide: the role list, and the permissions on the
+    resource types every app has (`organisations`, `rbac`, `subjects`). An app's
+    own entities are excluded precisely because they differ by design, and a
+    digest that always differed would tell a reader nothing.
+
+    Two apps showing the same value agree on the platform definitions. Different
+    values mean someone changed a role or a permission in one and not the other,
+    which is exactly the drift manual syncing is expected to produce eventually.
+    """
+    shared = {
+        role: {rt: perms for rt, perms in per_resource.items() if rt in COMMON_RESOURCE_TYPES}
+        for role, per_resource in resource_defaults.items()
+    }
+    canonical = {
+        "roles": sorted(role_names),
+        "resource_types": sorted(COMMON_RESOURCE_TYPES),
+        "defaults": {
+            role: {rt: {k: bool(v) for k, v in sorted(perms.items())}
+                   for rt, perms in sorted(per_resource.items())}
+            for role, per_resource in sorted(shared.items())
         },
     }
     blob = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
