@@ -56,3 +56,8 @@
 tbody tr:hover .actionCol { background: var(--mdpp-surface-2); }
 /* pinned to one product, the identifier columns are dead weight */
 .scopedTable { table-layout: auto; }
+
+/* A withdrawn test is kept ON PURPOSE, so it must read as present-but-void
+   rather than merely faint: struck through, and never mistakable for evidence. */
+.withdrawnRow td { opacity: 0.55; }
+.withdrawnRow td:first-child, .withdrawnRow .path { text-decoration: line-through; }

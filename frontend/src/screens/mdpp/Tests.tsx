@@ -57,6 +57,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
   const [requestedBy, setRequestedBy] = useState("");
   const [analysisType, setAnalysisType] = useState<AnalysisType | "">("");
   const [sort, setSort] = useState<"requested_at" | "-requested_at" | "analysed_at" | "-analysed_at">("-requested_at");
+  const [includeWithdrawn, setIncludeWithdrawn] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -73,9 +74,10 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
         laboratoryId: lab || undefined,
         requestedBy: pathScope ? undefined : requestedBy || undefined,
         analysisType: analysisType || undefined,
+        includeWithdrawn,
         sort,
       }),
-    [mdpp, effectivePrefix, level, status, lab, requestedBy, analysisType, sort, pathScope],
+    [mdpp, effectivePrefix, level, status, lab, requestedBy, analysisType, includeWithdrawn, sort, pathScope],
   );
   // Only organisations holding `laboratory`, AS MDPP KNOWS THEM: `laboratory_id`
   // is a foreign key in mdpp's table, and the host app's ids are different rows.
@@ -112,7 +114,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
     }
   };
 
-  const filtersActive = prefix || level || status || lab || requestedBy || analysisType || sort !== "-requested_at";
+  const filtersActive = prefix || level || status || lab || requestedBy || analysisType || includeWithdrawn || sort !== "-requested_at";
 
   const body = (
     <>
@@ -151,6 +153,14 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
             <option value="in_loco">in-loco</option>
             <option value="submitted_data">client-submitted</option>
           </LabelledSelect>
+          <LabelledSelect
+            label="Withdrawn"
+            value={includeWithdrawn ? "show" : "hide"}
+            onChange={(e) => setIncludeWithdrawn(e.target.value === "show")}
+          >
+            <option value="hide">Hide withdrawn</option>
+            <option value="show">Show withdrawn</option>
+          </LabelledSelect>
           <LabelledSelect label="Sort by" value={sort} onChange={(e) => setSort(e.target.value as typeof sort)}>
             <option value="-requested_at">Requested, newest</option>
             <option value="requested_at">Requested, oldest</option>
@@ -161,11 +171,20 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => { setPrefix(""); setLevel(""); setStatus(""); setLab(""); setRequestedBy(""); setAnalysisType(""); setSort("-requested_at"); }}
+              onClick={() => { setPrefix(""); setLevel(""); setStatus(""); setLab(""); setRequestedBy(""); setAnalysisType(""); setIncludeWithdrawn(false); setSort("-requested_at"); }}
             >
               Clear filters
             </Button>
           )}
+        </div>
+      )}
+
+      {pathScope && (
+        <div className={s.toolbar}>
+          <span className={s.spacer} />
+          <Button size="sm" variant="ghost" onClick={() => setIncludeWithdrawn((v) => !v)}>
+            {includeWithdrawn ? "Hide withdrawn" : "Show withdrawn"}
+          </Button>
         </div>
       )}
 
@@ -208,7 +227,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
           )}
           {items.map((t) => (
             <Fragment key={t.id}>
-              <tr>
+              <tr className={t.withdrawn_at ? s.withdrawnRow : undefined}>
                 {!pathScope && <td><span className={s.path}>{t.gs1_path}</span></td>}
                 {!pathScope && <td>{t.level ? <Tag>{t.level}</Tag> : <span className={s.sub}>—</span>}</td>}
                 {!pathScope && <td>{t.requested_by_name ?? <span className={s.sub}>—</span>}</td>}
@@ -238,6 +257,12 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
                     )}
                   </span>
                   {t.status_message && <div className={s.sub}>{t.status_message}</div>}
+                  {t.withdrawn_at && (
+                    <div className={s.sub}>
+                      <Chip tone="warn">withdrawn</Chip>{" "}
+                      {t.withdrawn_reason ? `“${t.withdrawn_reason}”` : "no reason given"}
+                    </div>
+                  )}
                 </td>
                 <td className={s.actionCol}>
                   {t.status === "completed" ? (

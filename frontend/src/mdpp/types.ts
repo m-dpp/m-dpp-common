@@ -171,6 +171,9 @@ export interface TestListItem {
   requested_at: string | null;
   last_polled_at: string | null;
   withdrawn_at: string | null;
+  /** Why it was withdrawn — the reason a withdrawn test is kept rather than
+   *  deleted. A row nobody can explain is no better than a missing one. */
+  withdrawn_reason: string | null;
   analysis_type: AnalysisType | null;
   verification_status: VerificationStatus | null;
   method_reference: string | null;
