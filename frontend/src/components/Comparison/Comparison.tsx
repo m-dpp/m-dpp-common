@@ -149,19 +149,23 @@ function Basis({ declaration }: { declaration: Declaration | null }) {
   if (!declaration) {
     return (
       <div className={s.basis}>
-        <span>No declaration existed on this identifier when the test was requested.</span>
+        <span>Nothing has ever been declared on this identifier, so there is no claim to compare against.</span>
       </div>
     );
   }
+  const basis = declaration.basis ?? (declaration.at_test_time === false ? "selected" : "at_test_time");
   return (
     <div className={s.basis}>
       <span>Compared against <b>version {declaration.version}</b></span>
       <span className={s.basisNote}>
-        {declaration.at_test_time === false
+        {basis === "selected"
           ? "a version you selected, not the one current at test time"
-          : "the version current when this test was requested"}
+          : basis === "declared_after_test"
+            ? "declared AFTER this test was requested — nothing was claimed when the sample was sent"
+            : "the version current when this test was requested"}
       </span>
       <span className={s.basisNote}>declared {fmtDate(declaration.declared_at)}</span>
+      {basis === "declared_after_test" && <Chip tone="warn">declared after the test</Chip>}
       {declaration.withdrawn_at && <Chip tone="warn">withdrawn since</Chip>}
     </div>
   );

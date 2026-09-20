@@ -36,8 +36,13 @@ export interface Declaration {
   reason: DeclarationReason;
   withdrawn_at: string | null;
   components: DeclaredComponentRef[];
-  /** Present on a comparison's declaration: was this the version current when
-   *  the test was requested, or one the caller forced with `declaration_version`? */
+  /** Present on a comparison's declaration: how it came to be the one compared
+   *  against.
+   *  - `at_test_time` — the claim that was live when the test was requested
+   *  - `declared_after_test` — nothing was claimed then; this came afterwards
+   *  - `selected` — a caller asked for a specific version */
+  basis?: "at_test_time" | "declared_after_test" | "selected";
+  /** @deprecated `basis === "at_test_time"`. */
   at_test_time?: boolean;
 }
 
