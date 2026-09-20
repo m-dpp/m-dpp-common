@@ -40,6 +40,8 @@ export function ActingAsSwitcher({ roles }: ActingAsSwitcherProps) {
   }, [principal]);
 
   const label = (n: string) => roles?.find((r) => r.name === n)?.label ?? n;
+  // anonymous *because* a choice is outstanding — not because there is no access
+  const mustChoose = Boolean(principal?.anonymous) && (principal?.organisations?.length ?? 0) > 1;
   const who = principal?.subject?.display_name || principal?.subject?.sub || principal?.sub || "Anonymous";
 
   return (
@@ -66,6 +68,7 @@ export function ActingAsSwitcher({ roles }: ActingAsSwitcherProps) {
         <>
           <div className={s.label}>
             <span>On behalf of</span>
+            {mustChoose && <span className={s.mustChoose}>choose one</span>}
           </div>
           <Select
             size_="sm"
@@ -82,6 +85,16 @@ export function ActingAsSwitcher({ roles }: ActingAsSwitcherProps) {
             ))}
           </Select>
         </>
+      )}
+
+      {/* Resolving to `public` because no organisation was picked looks exactly
+          like having no access at all — so say which it is. */}
+      {mustChoose && (
+        <div className={s.notice}>
+          This user acts for {principal?.organisations.length} organisations. Until one is
+          chosen they have <strong>no authority</strong> and see only public data — roles are
+          never merged across organisations.
+        </div>
       )}
 
       <div className={s.who}>

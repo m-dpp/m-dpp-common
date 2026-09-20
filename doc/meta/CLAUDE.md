@@ -146,8 +146,23 @@ entity-agnostic.
   and `tolerance` are the two comparison inputs defined there, so both are shown RESOLVED
   (effective tolerance badged on the tree, dimmed when inherited, with the ancestor named), and a
   node with no tolerance in its chain says so rather than looking like a pass.
+- 2026-09-20 (0.11.0, tenancy addendum): a subject may hold SEVERAL memberships — the old
+  `uq_membership_subject` is gone, uniqueness is (subject, organisation). Roles are NEVER merged
+  across them: a user acts as one organisation at a time, and with several and none chosen,
+  `resolve_principal` refuses rather than defaulting (defaulting would make authority depend on row
+  order). Identity and acting context are separate mechanisms: the identity source PROVES who you
+  are; `X-Acting-Org` SELECTS which membership is in force and is refused unless held.
+- 2026-09-20 (0.11.0): `org_admin` is a boolean on the membership, not a role — organisation roles
+  say what the ORGANISATION is and would apply to every member at once.
+- 2026-09-20 (0.11.0): `platform_admin` (governs definitions) and `administrator` (operates an
+  installation, reads but cannot rewrite the matrices) are distinct. `rbac/platform.py` is the one
+  definition both apps seed from; `platform_definition_checksum` is the cross-app comparable digest
+  (the per-app `permissions_checksum` is expected to differ and cannot reveal drift).
+- 2026-09-20 (0.11.0): `scoping.py` names the three scopes — owned / visible-to-role / produced.
+  Owning nothing matches NOTHING, never everything.
+- This resolves the open question "one organisation per user, or several": several.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions
 - Whether any mdpp data is non-public (decides how much read-RBAC mdpp needs).
-- One organisation per user, or several. (MVP: exactly one — `memberships.subject_id` is unique.)
+- ~~One organisation per user, or several.~~ **Resolved 2026-09-20: several.**

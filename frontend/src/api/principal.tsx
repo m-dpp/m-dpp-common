@@ -1,6 +1,6 @@
 import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useApi } from "./context";
-import { useActingAs } from "./identity";
+import { useActingAs, useActingOrganisation } from "./identity";
 import type { Principal, ResourceAction } from "./types";
 
 export interface PrincipalState {
@@ -17,10 +17,12 @@ export interface PrincipalState {
 
 const Ctx = createContext<PrincipalState | null>(null);
 
-/** Fetches `/me` and re-fetches whenever the acting-as identity changes. */
+/** Fetches `/me` and re-fetches whenever the identity OR the acting organisation
+ *  changes — both decide what the principal is. */
 export function PrincipalProvider({ children }: { children: ReactNode }) {
   const api = useApi();
   const [actingAs] = useActingAs();
+  const [actingOrg] = useActingOrganisation();
   const [principal, setPrincipal] = useState<Principal | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +41,11 @@ export function PrincipalProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void refresh();
-  }, [refresh, actingAs]);
+    // BOTH inputs re-resolve the principal: changing identity changes who you
+    // are, and changing organisation changes the authority you hold. Watching
+    // only the identity made the organisation picker look broken — the request
+    // header changed but nothing re-read /me.
+  }, [refresh, actingAs, actingOrg]);
 
   const value = useMemo<PrincipalState>(
     () => ({

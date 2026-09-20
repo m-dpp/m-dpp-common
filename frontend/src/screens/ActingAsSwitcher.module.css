@@ -7,3 +7,5 @@
 .reason { font-size: var(--mdpp-fs-xs); color: #8a5a12; }
 .roles { display: flex; flex-wrap: wrap; gap: 3px; }
 .orgAdmin { color: var(--mdpp-accent); font-weight: 600; }
+.mustChoose { color: var(--mdpp-error); font-weight: 700; text-transform: none; letter-spacing: 0; }
+.notice { font-size: var(--mdpp-fs-xs); color: #8a5a12; line-height: 1.4; }
