@@ -101,6 +101,10 @@ export interface ComparisonFlag {
 
 export interface ComparisonTest {
   id: string;
+  /** The organisation that ASKED for the test — distinct from the lab that ran
+   *  it. Provenance, derived by mdpp-app from the caller's principal. */
+  requested_by: string;
+  requested_by_name: string | null;
   laboratory_id: string;
   laboratory_name: string | null;
   ticket_number: string;
@@ -152,6 +156,8 @@ export interface TestListItem {
   id: string;
   gs1_path: string;
   level: Gs1Level | null;
+  requested_by: string;
+  requested_by_name: string | null;
   laboratory_id: string;
   laboratory_name: string | null;
   ticket_number: string;
@@ -197,6 +203,7 @@ export interface TestQuery {
   level?: Gs1Level | "";
   status?: TestStatus | "";
   laboratoryId?: string;
+  requestedBy?: string;
   analysisType?: AnalysisType | "";
   sort?: "requested_at" | "-requested_at" | "analysed_at" | "-analysed_at";
   includeWithdrawn?: boolean;

@@ -132,6 +132,7 @@ export function createMdppClient(opts: MdppClientOptions = {}): MdppApiClient {
         level: q.level || undefined,
         status: q.status || undefined,
         laboratory_id: q.laboratoryId,
+        requested_by: q.requestedBy,
         analysis_type: q.analysisType || undefined,
         sort: q.sort,
         include_withdrawn: q.includeWithdrawn,

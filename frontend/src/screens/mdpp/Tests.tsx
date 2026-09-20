@@ -157,6 +157,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
           <tr>
             {!pathScope && <th>GS1 path</th>}
             {!pathScope && <th>Level</th>}
+            <th>Requested by</th>
             <th>Laboratory</th>
             <th>Type</th>
             <th>Ticket</th>
@@ -169,7 +170,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
         <tbody>
           {items.length === 0 && (
             <tr>
-              <td colSpan={pathScope ? 7 : 9}>
+              <td colSpan={pathScope ? 8 : 10}>
                 {list.loading ? (
                   <EmptyState title="Loading…" />
                 ) : (
@@ -190,6 +191,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
               <tr>
                 {!pathScope && <td><span className={s.path}>{t.gs1_path}</span></td>}
                 {!pathScope && <td>{t.level ? <Tag>{t.level}</Tag> : <span className={s.sub}>—</span>}</td>}
+                <td>{t.requested_by_name ?? <span className={s.sub}>—</span>}</td>
                 <td>{t.laboratory_name ?? t.laboratory_id}</td>
                 <td>
                   {t.analysis_type
@@ -226,7 +228,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
               </tr>
               {expanded === t.id && (
                 <tr>
-                  <td colSpan={pathScope ? 7 : 9} className={s.expando}>
+                  <td colSpan={pathScope ? 8 : 10} className={s.expando}>
                     <ResultPanel test={t} note={comparisonNote} />
                   </td>
                 </tr>

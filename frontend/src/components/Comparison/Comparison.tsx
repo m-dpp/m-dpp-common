@@ -230,6 +230,7 @@ export function Comparison({ comparison, showLegend = true, contextNote }: Compa
 
       <div className={s.headMeta}>
         <span>method <b>{test.method_reference ?? "—"}</b></span>
+        <span>requested by <b>{test.requested_by_name ?? "—"}</b></span>
         <span>lab <b>{test.laboratory_name ?? test.laboratory_id}</b></span>
         <span>ticket <b>{test.ticket_number}</b></span>
         <span>analysed <b>{fmtDate(test.analysed_at)}</b></span>
