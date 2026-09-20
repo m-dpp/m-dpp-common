@@ -176,6 +176,13 @@ entity-agnostic.
   shared store. An app-specific client that passed only the identity left a multi-membership user
   unresolved, and the 403 blamed the role ("Role(s) public not permitted") on a user who plainly
   held it. The resource gate now appends the principal's own reason when it is anonymous.
+- 2026-09-20 (0.11.0): `GS1_PEDANTIC` (default **true**) enforces the GTIN check digit and the
+  strict GMN character set. Opposite default to `GLN_PEDANTIC` on purpose: a GTIN becomes a
+  permanent key for a passport, and the check digit is the only thing that catches a transposed
+  pair of digits before it is written; a GLN names a company and is recoverable. Leniency relaxes
+  ONLY the checksum and the GMN charset — never the length, the digits, or the `/ ? #` that
+  structure a path — so turning it back on can never change what an existing path means. The
+  compose files set it false for demos; the error message names the flag.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions
