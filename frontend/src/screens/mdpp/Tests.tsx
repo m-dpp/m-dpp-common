@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { usePrincipal } from "../../api/principal";
 import { Comparison } from "../../components/Comparison/Comparison";
 import { Button } from "../../design/Button";
@@ -48,12 +48,13 @@ export interface TestsProps {
  */
 export function Tests({ pathScope = null, resourceType = "tests", bare = false, comparisonNote }: TestsProps) {
   const mdpp = useMdpp();
-  const { can } = usePrincipal();
+  const { can, principal } = usePrincipal();
 
   const [prefix, setPrefix] = useState("");
   const [level, setLevel] = useState<Gs1Level | "">("");
   const [status, setStatus] = useState<TestStatus | "">("");
   const [lab, setLab] = useState("");
+  const [requestedBy, setRequestedBy] = useState("");
   const [analysisType, setAnalysisType] = useState<AnalysisType | "">("");
   const [sort, setSort] = useState<"requested_at" | "-requested_at" | "analysed_at" | "-analysed_at">("-requested_at");
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -69,14 +70,29 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
         level: pathScope ? "" : level,
         status: status || undefined,
         laboratoryId: lab || undefined,
+        requestedBy: pathScope ? undefined : requestedBy || undefined,
         analysisType: analysisType || undefined,
         sort,
       }),
-    [mdpp, effectivePrefix, level, status, lab, analysisType, sort, pathScope],
+    [mdpp, effectivePrefix, level, status, lab, requestedBy, analysisType, sort, pathScope],
   );
   // Only organisations holding `laboratory`, AS MDPP KNOWS THEM: `laboratory_id`
   // is a foreign key in mdpp's table, and the host app's ids are different rows.
   const { organisations: labs } = useOrganisationsWithRole("laboratory", mdpp);
+  // who COMMISSIONED the test, as distinct from who ran it
+  const { organisations: requesters } = useOrganisationsWithRole("economic_operator", mdpp);
+
+  // Open on the organisation you are acting for — same reasoning as the
+  // Declarations screen, and applied on change rather than on every render so
+  // clearing it sticks.
+  const actingOrgId = principal?.organisation?.id ?? null;
+  const commissions = (principal?.roles ?? []).includes("economic_operator");
+  const appliedFor = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (appliedFor.current === actingOrgId) return;
+    appliedFor.current = actingOrgId;
+    setRequestedBy(commissions && actingOrgId ? actingOrgId : "");
+  }, [actingOrgId, commissions]);
 
   const items = list.data?.items ?? [];
   const mayWrite = can(resourceType, "create");
@@ -94,7 +110,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
     }
   };
 
-  const filtersActive = prefix || level || status || lab || analysisType || sort !== "-requested_at";
+  const filtersActive = prefix || level || status || lab || requestedBy || analysisType || sort !== "-requested_at";
 
   const body = (
     <>
@@ -115,6 +131,10 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
           <LabelledSelect label="Status" value={status} onChange={(e) => setStatus(e.target.value as TestStatus | "")}>
             <option value="">Any status</option>
             {STATUSES.map((x) => <option key={x} value={x}>{x.replace("_", " ")}</option>)}
+          </LabelledSelect>
+          <LabelledSelect label="Requested by" value={requestedBy} onChange={(e) => setRequestedBy(e.target.value)}>
+            <option value="">Any organisation</option>
+            {requesters.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
           </LabelledSelect>
           <LabelledSelect label="Laboratory" value={lab} onChange={(e) => setLab(e.target.value)}>
             <option value="">Any laboratory</option>
@@ -139,7 +159,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => { setPrefix(""); setLevel(""); setStatus(""); setLab(""); setAnalysisType(""); setSort("-requested_at"); }}
+              onClick={() => { setPrefix(""); setLevel(""); setStatus(""); setLab(""); setRequestedBy(""); setAnalysisType(""); setSort("-requested_at"); }}
             >
               Clear filters
             </Button>

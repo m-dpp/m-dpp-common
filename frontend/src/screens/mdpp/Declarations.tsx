@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePrincipal } from "../../api/principal";
 import { Button } from "../../design/Button";
 import { Card, CardBody, CardHeader } from "../../design/Card";
@@ -9,6 +9,7 @@ import { Modal } from "../../design/Modal";
 import { Notice } from "../../design/Notice";
 import { DataTable, type Column } from "../../design/Table";
 import { errorMessage, useAsync } from "../../hooks/useAsync";
+import { useOrganisationsWithRole } from "../../hooks/useOrganisationsWithRole";
 import { useMdpp } from "../../mdpp/context";
 import type { DeclarationListItem, Gs1Level } from "../../mdpp/types";
 import { CompositionEditor, type CompositionRow, toComponents } from "./CompositionEditor";
@@ -30,11 +31,28 @@ export interface DeclarationsProps {
 
 export function Declarations({ pathScope = null, resourceType = "declarations" }: DeclarationsProps) {
   const mdpp = useMdpp();
-  const { can } = usePrincipal();
+  const { can, principal } = usePrincipal();
 
   const [prefix, setPrefix] = useState("");
   const [level, setLevel] = useState<Gs1Level | "">("");
+  const [declaredBy, setDeclaredBy] = useState("");
   const [currentOnly, setCurrentOnly] = useState(true);
+
+  // Organisations that declare, as MDPP knows them — `declared_by` is an id in
+  // mdpp's table, so the host app's list would filter on ids that do not exist here.
+  const { organisations: declarers } = useOrganisationsWithRole("economic_operator", mdpp);
+
+  // Open on the organisation you are acting for, so what you can write and what
+  // you see line up. Applied when that organisation CHANGES, never on every
+  // render, or clearing the filter would be undone on the spot.
+  const actingOrgId = principal?.organisation?.id ?? null;
+  const declares = (principal?.roles ?? []).includes("economic_operator");
+  const appliedFor = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (appliedFor.current === actingOrgId) return;
+    appliedFor.current = actingOrgId;
+    setDeclaredBy(declares && actingOrgId ? actingOrgId : "");
+  }, [actingOrgId, declares]);
   const [selected, setSelected] = useState<string | null>(pathScope);
   const [creating, setCreating] = useState(false);
 
@@ -44,9 +62,10 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
       mdpp.listDeclarations({
         pathPrefix: effectivePrefix || undefined,
         level: pathScope ? "" : level,
+        declaredBy: pathScope ? undefined : declaredBy || undefined,
         currentOnly: pathScope ? false : currentOnly,
       }),
-    [mdpp, effectivePrefix, level, currentOnly, pathScope],
+    [mdpp, effectivePrefix, level, declaredBy, currentOnly, pathScope],
   );
 
   const items = list.data?.items ?? [];
@@ -151,6 +170,12 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
                   <option key={l} value={l}>{l}</option>
                 ))}
               </LabelledSelect>
+              <LabelledSelect label="Declared by" value={declaredBy} onChange={(e) => setDeclaredBy(e.target.value)}>
+                <option value="">Any organisation</option>
+                {declarers.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </LabelledSelect>
               <LabelledSelect
                 label="Versions"
                 value={currentOnly ? "current" : "all"}
@@ -159,8 +184,8 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
                 <option value="current">Current only</option>
                 <option value="all">All versions</option>
               </LabelledSelect>
-              {(prefix || level || !currentOnly) && (
-                <Button size="sm" variant="ghost" onClick={() => { setPrefix(""); setLevel(""); setCurrentOnly(true); }}>
+              {(prefix || level || declaredBy || !currentOnly) && (
+                <Button size="sm" variant="ghost" onClick={() => { setPrefix(""); setLevel(""); setDeclaredBy(""); setCurrentOnly(true); }}>
                   Clear filters
                 </Button>
               )}
