@@ -4,7 +4,7 @@ import { Button } from "../../design/Button";
 import { Card, CardBody, CardHeader } from "../../design/Card";
 import { Chip, Tag } from "../../design/Chip";
 import { EmptyState } from "../../design/EmptyState";
-import { LabelledInput, LabelledSelect } from "../../design/Field";
+import { Field, LabelledInput, LabelledSelect } from "../../design/Field";
 import { Modal } from "../../design/Modal";
 import { Notice } from "../../design/Notice";
 import { DataTable, type Column } from "../../design/Table";
@@ -26,13 +26,11 @@ export interface DeclarationsProps {
   pathScope?: string | null;
   /** The RBAC resource type declarations are gated on in the host's policy. */
   resourceType?: string;
-  /** Organisation the new version is declared by; defaults to the principal's. */
-  declaredBy?: string | null;
 }
 
-export function Declarations({ pathScope = null, resourceType = "declarations", declaredBy = null }: DeclarationsProps) {
+export function Declarations({ pathScope = null, resourceType = "declarations" }: DeclarationsProps) {
   const mdpp = useMdpp();
-  const { can, principal } = usePrincipal();
+  const { can } = usePrincipal();
 
   const [prefix, setPrefix] = useState("");
   const [level, setLevel] = useState<Gs1Level | "">("");
@@ -202,7 +200,6 @@ export function Declarations({ pathScope = null, resourceType = "declarations", 
       {creating && (
         <NewVersionModal
           gs1Path={pathScope ?? selected ?? ""}
-          declaredBy={declaredBy ?? principal?.organisation?.id ?? ""}
           onClose={() => setCreating(false)}
           onSaved={() => { setCreating(false); void list.reload(); }}
         />
@@ -222,7 +219,6 @@ const REASONS = [
 
 function NewVersionModal({
   gs1Path,
-  declaredBy,
   onClose,
   onSaved,
 }: {
@@ -230,7 +226,6 @@ function NewVersionModal({
    *  editable field, because there is no other way to make a FIRST declaration
    *  on a product that has none. */
   gs1Path: string;
-  declaredBy: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -240,7 +235,11 @@ function NewVersionModal({
   const pathFixed = Boolean(gs1Path);
   const [rows, setRows] = useState<CompositionRow[]>([{ fibre: "", percentage: "" }]);
   const [reason, setReason] = useState<(typeof REASONS)[number]["value"]>("initial");
-  const [org, setOrg] = useState(declaredBy);
+  // Who declares is NOT a choice: it is the organisation you are acting for.
+  // A picker of economic operators would offer options the service refuses,
+  // because you may only declare as an organisation you represent.
+  const { principal } = usePrincipal();
+  const declaringOrg = principal?.organisation ?? null;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -250,7 +249,7 @@ function NewVersionModal({
     setSaving(true);
     setError(null);
     try {
-      await mdpp.createDeclarationVersion(path.trim(), { declared_by: org, reason, components });
+      await mdpp.createDeclarationVersion(path.trim(), { reason, components });
       onSaved();
     } catch (e) {
       setError(errorMessage(e));
@@ -267,7 +266,7 @@ function NewVersionModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button onClick={save} disabled={saving || components.length === 0 || !org || !path.trim()}>
+          <Button onClick={save} disabled={saving || components.length === 0 || !declaringOrg || !path.trim()}>
             {saving ? "Saving…" : "Create version"}
           </Button>
         </>
@@ -288,12 +287,21 @@ function NewVersionModal({
           placeholder="01/08718036001015/10/LOT-2026-BB-001"
           hint={pathFixed ? undefined : "The identifier this composition is declared for. A first declaration creates version 1."}
         />
-        <LabelledInput
-          label="Declared by (organisation id)"
-          value={org}
-          onChange={(e) => setOrg(e.target.value)}
-          hint="You may only declare as the organisation you represent."
-        />
+        <Field label="Declared by">
+          {declaringOrg ? (
+            <div className={s.declaringOrg}>
+              <strong>{declaringOrg.name}</strong>
+              <span>
+                the organisation you are acting for — switch organisation to declare as another
+              </span>
+            </div>
+          ) : (
+            <Notice tone="warn">
+              You are not acting for an organisation, so there is nobody to declare this
+              composition. Choose one in the “acting as” switcher.
+            </Notice>
+          )}
+        </Field>
         <LabelledSelect label="Reason" value={reason} onChange={(e) => setReason(e.target.value as typeof reason)}>
           {REASONS.map((r) => (
             <option key={r.value} value={r.value}>{r.label}</option>

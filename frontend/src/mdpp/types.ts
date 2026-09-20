@@ -211,9 +211,11 @@ export interface TestQuery {
   offset?: number;
 }
 
-/** A new declaration version: fibre slug + percentage rows, never raw JSON. */
+/** A new declaration version: fibre slug + percentage rows, never raw JSON.
+ *
+ *  `declared_by` is deliberately absent — mdpp takes the declaring organisation
+ *  from the one you are acting for, never from the payload. */
 export interface DeclarationCreate {
-  declared_by: string;
   reason: DeclarationReason;
   components: { fibre: string; percentage: number }[];
 }

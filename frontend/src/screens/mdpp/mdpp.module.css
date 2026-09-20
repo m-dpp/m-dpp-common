@@ -45,3 +45,6 @@
 .nodeLabel { flex: 1 1 auto; }
 .tolBadge { font-variant-numeric: tabular-nums; }
 .inheritedTol { opacity: 0.55; }
+
+.declaringOrg { display: flex; flex-direction: column; gap: 2px; font-size: var(--mdpp-fs-sm); }
+.declaringOrg span { color: var(--mdpp-muted); font-size: var(--mdpp-fs-xs); }
