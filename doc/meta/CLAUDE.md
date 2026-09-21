@@ -226,6 +226,11 @@ entity-agnostic.
   server-side. It existed because a picker whose value became a foreign key in service B had to
   list service B's organisations; there is one organisation table now. It never offers the platform
   organisation, which would only produce a 422 on submit.
+- 2026-09-21: `comparison()` takes `declarationPath` and `comparisons()` a `declarationPaths` map —
+  PLUMBING ONLY. `src/mdpp/` still derives nothing from the order of the paths it is given and does
+  not know they form a chain; the host that has the hierarchy computes the map. `Comparison` renders
+  `inherited` / `source_gs1_path` when present, because a verdict shown against a claim made on
+  another identifier must name it — still rendering, still computing nothing.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions

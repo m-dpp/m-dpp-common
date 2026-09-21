@@ -73,9 +73,25 @@ export interface MdppApiClient {
   withdrawTest(gs1Path: string, testId: string, reason?: string): Promise<unknown>;
 
   // the comparison — one identifier per call, by design
-  comparison(gs1Path: string, opts?: { declarationVersion?: number }): Promise<ComparisonResponse>;
+  comparison(
+    gs1Path: string,
+    opts?: {
+      declarationVersion?: number;
+      /** The identifier whose declaration is EFFECTIVE for this one — an
+       *  ancestor. mdpp holds no tree and never derives it; a caller that has
+       *  the hierarchy names it. Ignored when this identifier declares its own
+       *  composition, so it may be passed unconditionally. */
+      declarationPath?: string;
+    },
+  ): Promise<ComparisonResponse>;
   /** Several identifiers, still one call each — just awaited together. */
-  comparisons(gs1Paths: string[]): Promise<Record<string, ComparisonResponse | null>>;
+  comparisons(
+    gs1Paths: string[],
+    /** Per-path effective declaration source, supplied by a caller that knows
+     *  the ancestry. Plumbing only: this client derives nothing from the order
+     *  of `gs1Paths` and does not know they form a chain. */
+    opts?: { declarationPaths?: Record<string, string> },
+  ): Promise<Record<string, ComparisonResponse | null>>;
 
   // tree annotations
   counts(paths: string[]): Promise<Record<string, PathCounts>>;
@@ -171,16 +187,22 @@ export function createMdppClient(opts: MdppClientOptions = {}): MdppApiClient {
       req("DELETE", `/${encodePath(p)}/tests/${id}${queryString({ reason })}`),
 
     comparison: (p, o = {}) =>
-      req("GET", `/${encodePath(p)}/comparison${queryString({ declaration_version: o.declarationVersion })}`),
+      req(
+        "GET",
+        `/${encodePath(p)}/comparison${queryString({
+          declaration_version: o.declarationVersion,
+          declaration_path: o.declarationPath,
+        })}`,
+      ),
 
-    async comparisons(paths) {
+    async comparisons(paths, opts = {}) {
       // One request per identifier — mdpp is flat and answers about exactly one.
       // A path with nothing on it (or a caller with no access) resolves to null
       // rather than rejecting the whole batch; a host showing a chain wants the
       // levels that DO have data, not an error because one level has none.
       const settled = await Promise.all(
         paths.map((p) =>
-          this.comparison(p).then(
+          this.comparison(p, { declarationPath: opts.declarationPaths?.[p] }).then(
             (r) => [p, r] as const,
             () => [p, null] as const,
           ),

@@ -149,14 +149,30 @@ function Basis({ declaration }: { declaration: Declaration | null }) {
   if (!declaration) {
     return (
       <div className={s.basis}>
-        <span>Nothing has ever been declared on this identifier, so there is no claim to compare against.</span>
+        {/* Deliberately says nothing about ancestors: this service is flat and
+            has no way to know whether one exists. A viewer that holds the
+            hierarchy passes the effective claim in and this branch is not
+            reached. Promising an inherited claim that may not exist would be
+            worse than saying plainly what IS known. */}
+        <span>Nothing has been declared on this identifier, so there is no claim to compare against.</span>
       </div>
     );
   }
   const basis = declaration.basis ?? (declaration.at_test_time === false ? "selected" : "at_test_time");
   return (
     <div className={s.basis}>
-      <span>Compared against <b>version {declaration.version}</b></span>
+      <span>
+        Compared against <b>version {declaration.version}</b>
+        {declaration.inherited && declaration.source_gs1_path && (
+          <>
+            {" "}declared on <code>{declaration.source_gs1_path}</code>
+          </>
+        )}
+      </span>
+      {/* An inherited claim is named, never implied: a verdict rendered against
+          a claim made on another identifier must say which, or a reader cannot
+          tell whose composition was actually tested. */}
+      {declaration.inherited && <Chip>inherited claim</Chip>}
       <span className={s.basisNote}>
         {basis === "selected"
           ? "a version you selected, not the one current at test time"

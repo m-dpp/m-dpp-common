@@ -44,6 +44,12 @@ export interface Declaration {
   basis?: "at_test_time" | "declared_after_test" | "selected";
   /** @deprecated `basis === "at_test_time"`. */
   at_test_time?: boolean;
+  /** True when this claim was made on a DIFFERENT identifier and inherited —
+   *  typically a model's declaration judging one of its batches' tests.
+   *  Orthogonal to `basis`, which says how the *version* was chosen. */
+  inherited?: boolean;
+  /** Which identifier the claim was made on. Present only when `inherited`. */
+  source_gs1_path?: string;
 }
 
 // ── the three verdicts ───────────────────────────────────────────────────
