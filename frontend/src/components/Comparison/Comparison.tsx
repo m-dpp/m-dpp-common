@@ -176,9 +176,11 @@ function Basis({ declaration }: { declaration: Declaration | null }) {
       <span className={s.basisNote}>
         {basis === "selected"
           ? "a version you selected, not the one current at test time"
-          : basis === "declared_after_test"
-            ? "declared AFTER this test was requested — nothing was claimed when the sample was sent"
-            : "the version current when this test was requested"}
+          : basis === "current"
+            ? "the claim as it stands now — an inherited specification is read current, not as it stood at test time"
+            : basis === "declared_after_test"
+              ? "declared AFTER this test was requested — nothing was claimed when the sample was sent"
+              : "the version current when this test was requested"}
       </span>
       <span className={s.basisNote}>declared {fmtDate(declaration.declared_at)}</span>
       {basis === "declared_after_test" && <Chip tone="warn">declared after the test</Chip>}

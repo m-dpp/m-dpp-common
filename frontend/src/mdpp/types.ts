@@ -40,8 +40,11 @@ export interface Declaration {
    *  against.
    *  - `at_test_time` — the claim that was live when the test was requested
    *  - `declared_after_test` — nothing was claimed then; this came afterwards
-   *  - `selected` — a caller asked for a specific version */
-  basis?: "at_test_time" | "declared_after_test" | "selected";
+   *  - `selected` — a caller asked for a specific version
+   *  - `current` — an INHERITED claim, read as it stands now. An ancestor's
+   *    declaration is a standing specification rather than a point-in-time
+   *    assertion about this exact item, so it is evaluated as it stands. */
+  basis?: "at_test_time" | "declared_after_test" | "selected" | "current";
   /** @deprecated `basis === "at_test_time"`. */
   at_test_time?: boolean;
   /** True when this claim was made on a DIFFERENT identifier and inherited —

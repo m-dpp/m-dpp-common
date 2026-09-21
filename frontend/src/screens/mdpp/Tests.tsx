@@ -36,6 +36,13 @@ export interface TestsProps {
   bare?: boolean;
   /** A note rendered beside each comparison (e.g. "inherited from the variant"). */
   comparisonNote?: React.ReactNode;
+  /** The identifier whose declaration is EFFECTIVE for `pathScope` — an ancestor
+   *  supplied by a host that knows the hierarchy. Without it a scoped test whose
+   *  own identifier declares nothing expands to "nothing was declared", even
+   *  when the host is showing an inherited claim right above it. Only applied to
+   *  rows on `pathScope` itself: an unscoped listing spans identifiers that
+   *  share no ancestor. */
+  declarationPath?: string | null;
 }
 
 /**
@@ -46,7 +53,7 @@ export interface TestsProps {
  * row expands **in place** into the shared Comparison renderer; a pending or
  * errored row offers Refresh instead.
  */
-export function Tests({ pathScope = null, resourceType = "tests", bare = false, comparisonNote }: TestsProps) {
+export function Tests({ pathScope = null, resourceType = "tests", bare = false, comparisonNote, declarationPath = null }: TestsProps) {
   const mdpp = useMdpp();
   const { can, principal } = usePrincipal();
 
@@ -295,7 +302,13 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
               {expanded === t.id && (
                 <tr>
                   <td colSpan={pathScope ? 6 : 10} className={s.expando}>
-                    <ResultPanel test={t} note={comparisonNote} />
+                    <ResultPanel
+                      test={t}
+                      note={comparisonNote}
+                      // only for rows on the scoped identifier — an unscoped
+                      // listing spans identifiers that share no ancestor
+                      declarationPath={pathScope && t.gs1_path === pathScope ? declarationPath : null}
+                    />
                   </td>
                 </tr>
               )}
@@ -360,9 +373,20 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
  * path; this narrows to the one test that was expanded. No verdict is computed
  * here — or anywhere outside mdpp-app.
  */
-function ResultPanel({ test, note }: { test: TestListItem; note?: React.ReactNode }) {
+function ResultPanel({
+  test,
+  note,
+  declarationPath,
+}: {
+  test: TestListItem;
+  note?: React.ReactNode;
+  declarationPath?: string | null;
+}) {
   const mdpp = useMdpp();
-  const cmp = useAsync<ComparisonResponse>(() => mdpp.comparison(test.gs1_path), [mdpp, test.gs1_path]);
+  const cmp = useAsync<ComparisonResponse>(
+    () => mdpp.comparison(test.gs1_path, { declarationPath: declarationPath ?? undefined }),
+    [mdpp, test.gs1_path, declarationPath],
+  );
 
   if (cmp.loading) return <div className={s.expandoEmpty}>Loading the comparison…</div>;
   if (cmp.error) return <Notice tone="error">{cmp.error}</Notice>;
