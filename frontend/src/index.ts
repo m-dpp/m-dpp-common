@@ -8,6 +8,7 @@ export * from "./components/RoleChips";
 export * from "./api";
 export * from "./identity";
 export * from "./mdpp";
+export * from "./hierarchy";
 export * from "./hooks/useAsync";
 export * from "./hooks/useOrganisationsWithRole";
 export * from "./screens";

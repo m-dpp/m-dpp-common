@@ -315,6 +315,34 @@ The client covers declarations (list by prefix/level, current, history, new vers
 
 It carries **no organisation endpoints**. It used to, because mdpp kept its own organisation table and anything that became an mdpp foreign key (`laboratory_id` on a test) had to be an id mdpp issued. Organisations live in m-dpp-identity now: one row, one id, understood by every service, so a laboratory picker reads identity and the value it produces is valid everywhere.
 
+### Effective claims along a chain (`src/hierarchy`)
+
+```ts
+import { effectiveClaims, effectiveClaimFor } from "@m-dpp/ui";
+
+// chain ordered NEAREST FIRST: [thisProduct, parent, …, root]
+const declarationPaths = effectiveClaims(
+  chain.map((path) => ({ path, declares: …, hasEvidence: … })),
+);
+// → { "01/…/21/SN-001": "8013/GMN-…" }   pass each as mdpp's `declarationPath`
+```
+
+A manufacturer may declare on a **model** and commission tests on its **batches**; the batch
+inherits that claim, so its evidence is evidence about it. `effectiveClaims` answers *which claim
+each level's evidence should be judged against* — the nearest declaration at or above it, nothing
+merged, an own claim always winning. `effectiveClaimFor` answers the different question *what is
+claimed about this product* (it includes the level itself).
+
+**It is handed a chain and never goes looking for one.** Deriving ancestry belongs to whoever owns
+the tree, because a GS1 path cannot supply it: a batch (`01/{gtin}/10/{lot}`) and its model
+(`8013/{gmn}`) share no prefix. This is deliberately **not** in `src/mdpp/`, whose charter is that
+the client for a flat service knows nothing about hierarchy — that still holds. The rule lives here
+so that two hierarchy-aware viewers cannot disagree about which claim was tested, which would mean
+different verdicts from the same evidence.
+
+The *fetching* is not shared: how many round trips to make is a host's business, and dpp-app's
+two-pass approach is in its Molecular tab until passport-app exists to say what it needs.
+
 ### The Comparison renderer (`src/components/Comparison`)
 
 ```tsx

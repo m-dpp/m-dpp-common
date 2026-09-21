@@ -231,6 +231,19 @@ entity-agnostic.
   not know they form a chain; the host that has the hierarchy computes the map. `Comparison` renders
   `inherited` / `source_gs1_path` when present, because a verdict shown against a claim made on
   another identifier must name it — still rendering, still computing nothing.
+- 2026-09-21: `src/hierarchy/` — the consumer-side rule for **which declaration is effective at each
+  level of a chain**. This AMENDS the 2026-09-20 line that `src/mdpp/` carries no hierarchy and no
+  chain walking: that still holds, and the mdpp client is untouched. The boundary is now "the CLIENT
+  for a flat service knows nothing about hierarchy", not "the library knows nothing about it".
+  The rule is shared because two viewers disagreeing about WHICH CLAIM a test was judged against
+  would render different verdicts from the same evidence — the failure `Comparison` exists to
+  prevent. It is pure and unit-tested, which it was not while inlined in dpp-app.
+- 2026-09-21: `src/hierarchy/` is HANDED a chain and never goes looking for one. Deriving ancestry
+  belongs to whoever owns the tree (dpp-app's `parent_id`, a partner's own model, passport-app's
+  merge). A GS1 path cannot supply it: a batch and its model share no prefix, and a GMN is not
+  derivable from a GTIN. The ORCHESTRATION — how many round trips to make — deliberately stayed in
+  dpp-app: passport-app does not exist yet, and guessing its fetching shape is designing for an
+  imaginary consumer.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions
