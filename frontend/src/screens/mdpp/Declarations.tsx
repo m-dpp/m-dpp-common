@@ -41,9 +41,9 @@ export function Declarations({ pathScope = null, resourceType = "declarations" }
   const currentOnly = versions === "current";
   const includeWithdrawn = versions === "withdrawn";
 
-  // Organisations that declare, as MDPP knows them — `declared_by` is an id in
-  // mdpp's table, so the host app's list would filter on ids that do not exist here.
-  const { organisations: declarers } = useOrganisationsWithRole("economic_operator", mdpp);
+  // `declared_by` is an m-dpp-identity organisation id, which mdpp stores
+  // directly — one id per organisation, the same in every service.
+  const { organisations: declarers } = useOrganisationsWithRole("economic_operator");
 
   // Open on the organisation you are acting for, so what you can write and what
   // you see line up. Applied when that organisation CHANGES, never on every

@@ -1,4 +1,5 @@
 import { ReactNode, createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { useIdentity } from "../identity/context";
 import { useApi } from "./context";
 import { useActingAs, useActingOrganisation } from "./identity";
 import type { Principal, ResourceAction } from "./types";
@@ -17,10 +18,26 @@ export interface PrincipalState {
 
 const Ctx = createContext<PrincipalState | null>(null);
 
-/** Fetches `/me` and re-fetches whenever the identity OR the acting organisation
- *  changes — both decide what the principal is. */
+/**
+ * Resolves who is acting, and what they may do — from **both** services.
+ *
+ * The principal itself (subject, acting organisation, roles) is m-dpp-identity's
+ * answer and is authoritative. The `permissions` map is assembled from two
+ * sources, because each service governs different resource types: identity
+ * answers for `organisations`, `subjects` and `rbac`; the app answers for its
+ * own entities (`products`, `declarations`, …).
+ *
+ * Merged rather than chosen between: a UI that asked only its app would hide
+ * the Organisations screen, and one that asked only identity would hide
+ * Products. Neither service is lying — they are answering about different
+ * things.
+ *
+ * Both are re-fetched whenever the identity OR the acting organisation changes,
+ * because both decide what the principal is.
+ */
 export function PrincipalProvider({ children }: { children: ReactNode }) {
   const api = useApi();
+  const identity = useIdentity();
   const [actingAs] = useActingAs();
   const [actingOrg] = useActingOrganisation();
   const [principal, setPrincipal] = useState<Principal | null>(null);
@@ -30,21 +47,30 @@ export function PrincipalProvider({ children }: { children: ReactNode }) {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      setPrincipal(await api.me());
-      setError(null);
+      // Settled, not awaited together: an app backend that is down must not
+      // hide who you are, and identity being down is worth reporting even if
+      // the app answered.
+      const [fromIdentity, fromApp] = await Promise.allSettled([identity.me(), api.me()]);
+      if (fromIdentity.status === "rejected") throw fromIdentity.reason;
+      const base = fromIdentity.value;
+      const appPermissions =
+        fromApp.status === "fulfilled" ? (fromApp.value.permissions ?? {}) : {};
+      setPrincipal({
+        ...base,
+        permissions: { ...(base.permissions ?? {}), ...appPermissions },
+      });
+      setError(fromApp.status === "rejected" ? errorText(fromApp.reason) : null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(errorText(e));
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, identity]);
 
   useEffect(() => {
     void refresh();
     // BOTH inputs re-resolve the principal: changing identity changes who you
-    // are, and changing organisation changes the authority you hold. Watching
-    // only the identity made the organisation picker look broken — the request
-    // header changed but nothing re-read /me.
+    // are, and changing organisation changes the authority you hold.
   }, [refresh, actingAs, actingOrg]);
 
   const value = useMemo<PrincipalState>(
@@ -61,6 +87,10 @@ export function PrincipalProvider({ children }: { children: ReactNode }) {
     [principal, loading, error, refresh],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
 }
 
 export function usePrincipal(): PrincipalState {

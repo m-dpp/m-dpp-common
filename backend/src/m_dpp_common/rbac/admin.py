@@ -19,6 +19,14 @@ GET) passes the resource gate for ``resource_type`` (default ``"rbac"``): GET �
 read, POST → create, PATCH → update, DELETE → delete. Without them the router is
 open (the pre-0.10 behaviour) — a service should seed a policy for ``"rbac"`` and
 pass both.
+
+**What a service mounts.** Roles and organisation-role assignments live in
+m-dpp-identity and nowhere else, so an app that has no ``roles`` table passes
+``include_roles=False`` / ``include_organisation_roles=False`` and keeps only the
+attribute and resource matrices, which *are* per app. Identity mounts both and
+supplies the two hooks below, because assigning a role is an act it must guard
+(the platform organisation may hold no operating role) and record (the audit
+trail exists to answer "who granted this?").
 """
 
 import re
@@ -164,6 +172,10 @@ def make_rbac_router(
     get_principal=None,
     rbac_engine=None,
     resource_type: str = "rbac",
+    include_roles: bool = True,
+    include_organisation_roles: bool = True,
+    validate_organisation_role=None,
+    on_organisation_role_change=None,
 ) -> APIRouter:
     """
     resource_tables: entity_type → ORM model whose ``attrs`` bag is scanned by sync;
@@ -171,6 +183,17 @@ def make_rbac_router(
     resource_types:  every resource type the resource gate knows (superset of the
                      entity types — e.g. entities without an attrs bag). A new role
                      is fanned out over these. Defaults to ``resource_tables`` keys.
+    include_roles / include_organisation_roles:
+                     mount the ``/roles`` and ``/organisation-roles`` endpoints.
+                     False for a service that has no such table — since
+                     m-dpp-identity, that is both apps.
+    validate_organisation_role(organisation_id, role_name, db):
+                     async hook called before an assignment is created. Raise an
+                     HTTPException to refuse it.
+    on_organisation_role_change(db, action, assignment, principal):
+                     called with ``action`` ``"granted"`` or ``"revoked"``, inside
+                     the SAME transaction as the change, before the commit — so a
+                     trail written here cannot disagree with the rows.
     """
     Role = role_model
     AttrPermission = attr_permission_model
@@ -196,18 +219,34 @@ def make_rbac_router(
 
     READ, CREATE, UPDATE, DELETE = gate("read"), gate("create"), gate("update"), gate("delete")
 
+    # The handlers that call the change hooks need the acting principal. Always a
+    # dependency, never a bare default: FastAPI reads a `dict` parameter with a
+    # plain default as a REQUEST BODY, which would quietly give DELETE a body.
+    # Without a principal source (the open router) the dependency yields None,
+    # and a hook that records "who" records nobody — the truth in that setup.
+    async def _no_principal() -> None:
+        return None
+
+    _PRINCIPAL = Depends(get_principal if get_principal is not None else _no_principal)
+
     @router.get("/entity-types")
     async def list_entity_types():
         return entity_types
 
+    # Roles and organisation-role assignments are mounted on sub-routers so a
+    # service without those tables can leave them out entirely — see the
+    # `include_*` arguments.
+    roles_router = APIRouter()
+    org_roles_router = APIRouter()
+
     # ---------------------------------------------------------------- roles
 
-    @router.get("/roles")
+    @roles_router.get("/roles")
     async def list_roles(db: AsyncSession = Depends(get_db)):
         result = await db.execute(select(Role).order_by(Role.sort_order, Role.name))
         return [_role_out(r) for r in result.scalars().all()]
 
-    @router.post("/roles", status_code=201, dependencies=[CREATE])
+    @roles_router.post("/roles", status_code=201, dependencies=[CREATE])
     async def create_role(body: RoleCreate, db: AsyncSession = Depends(get_db)):
         if (await db.execute(select(Role).where(Role.name == body.name))).scalar_one_or_none():
             raise HTTPException(status_code=409, detail="Role already exists")
@@ -233,7 +272,7 @@ def make_rbac_router(
         await db.refresh(role)
         return {**_role_out(role), "fanned_out": fanned}
 
-    @router.patch("/roles/{name}", dependencies=[UPDATE])
+    @roles_router.patch("/roles/{name}", dependencies=[UPDATE])
     async def update_role(name: str, body: RoleUpdate, db: AsyncSession = Depends(get_db)):
         role = (await db.execute(select(Role).where(Role.name == name))).scalar_one_or_none()
         if role is None:
@@ -408,7 +447,7 @@ def make_rbac_router(
 
     # ------------------------------------------------- organisation roles
 
-    @router.get("/organisation-roles")
+    @org_roles_router.get("/organisation-roles")
     async def list_organisation_roles(db: AsyncSession = Depends(get_db)):
         result = await db.execute(
             select(OrganisationRole).order_by(
@@ -439,15 +478,25 @@ def make_rbac_router(
             for a in assignments
         ]
 
-    @router.post("/organisation-roles", status_code=201, dependencies=[CREATE])
+    @org_roles_router.post("/organisation-roles", status_code=201, dependencies=[CREATE])
     async def create_organisation_role(
-        body: OrganisationRoleCreate, db: AsyncSession = Depends(get_db)
+        body: OrganisationRoleCreate,
+        db: AsyncSession = Depends(get_db),
+        principal: dict | None = _PRINCIPAL,
     ):
         role = (await db.execute(select(Role).where(Role.name == body.role_name))).scalar_one_or_none()
         if role is None or not role.active:
             raise HTTPException(status_code=422, detail="Unknown or inactive role")
+        if validate_organisation_role is not None:
+            # May raise: the service decides which assignments are legal for it
+            # (identity refuses an operating role on the platform organisation).
+            await validate_organisation_role(body.organisation_id, body.role_name, db)
         obj = OrganisationRole(organisation_id=body.organisation_id, role_name=body.role_name)
         db.add(obj)
+        if on_organisation_role_change is not None:
+            # Inside this transaction, before the commit — a trail written here
+            # cannot end up describing a grant that was rolled back.
+            await on_organisation_role_change(db, "granted", obj, principal)
         try:
             await db.commit()
         except IntegrityError:
@@ -463,16 +512,27 @@ def make_rbac_router(
             "role_name": obj.role_name,
         }
 
-    @router.delete("/organisation-roles/{assignment_id}", status_code=204, dependencies=[DELETE])
+    @org_roles_router.delete("/organisation-roles/{assignment_id}", status_code=204, dependencies=[DELETE])
     async def delete_organisation_role(
-        assignment_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+        assignment_id: uuid.UUID,
+        db: AsyncSession = Depends(get_db),
+        principal: dict | None = _PRINCIPAL,
     ):
         obj = (
             await db.execute(select(OrganisationRole).where(OrganisationRole.id == assignment_id))
         ).scalar_one_or_none()
         if obj is None:
             raise HTTPException(status_code=404, detail="Assignment not found")
+        if on_organisation_role_change is not None:
+            # Before the delete: afterwards the row is gone and the trail could
+            # only say that *something* was revoked.
+            await on_organisation_role_change(db, "revoked", obj, principal)
         await db.delete(obj)
         await db.commit()
+
+    if include_roles:
+        router.include_router(roles_router)
+    if include_organisation_roles:
+        router.include_router(org_roles_router)
 
     return router

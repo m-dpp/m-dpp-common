@@ -1,18 +1,26 @@
-"""The auth seam.
+"""The auth seam — the two headers that say *who* and *on whose behalf*.
 
-Real path (use this):
-  identity source  →  subject  →  membership  →  organisation  →  roles  →  principal
-  (dev_identity)      (SubjectMixin) (MembershipMixin)            (RBAC tables)
+Since m-dpp-identity, principal RESOLUTION lives in
+:mod:`m_dpp_common.identity`, not here. What remains in this package is the pair
+of request-scoped sources it resolves *from*:
 
-    from m_dpp_common.auth import make_get_principal, make_subjects_router
-    get_principal = make_get_principal(get_db=..., subject_model=..., membership_model=...,
-                                       organisation_model=..., organisation_role_model=..., role_model=...)
+    identity source (X-Dev-Sub)   →  who is this request?          PROVED
+    acting organisation (X-Acting-Org) →  on whose behalf?         CHOSEN
 
-Only ``m_dpp_common.auth.dev_identity`` is temporary (it reads ``X-Dev-Sub``);
-swap it for a JWT-validating dependency via ``make_get_principal(identity=...)``.
+Keeping them separate is what makes the acting-as switcher a real control rather
+than a development trick: switching context changes authority and ownership
+without touching who you are, and changing who you are must not silently carry
+an organisation over.
 
-``get_principal`` (module level) is the LEGACY ``X-Dev-Role`` stub, kept for one
-release for services that have not migrated yet.
+Only ``dev_identity`` is temporary — it reads a header. Swapping to real
+authentication means passing a JWT-validating dependency to
+``m_dpp_common.identity.make_get_principal(identity=...)``; the acting selector
+survives unchanged, because the choice is still the user's to make, it just
+travels in a session or token claim instead.
+
+    from m_dpp_common.identity import IdentityClient, make_get_principal
+
+    get_principal = make_get_principal(client=IdentityClient())
 """
 
 from m_dpp_common.auth.acting_organisation import (
@@ -20,29 +28,10 @@ from m_dpp_common.auth.acting_organisation import (
     acting_organisation,
 )
 from m_dpp_common.auth.dev_identity import DEV_IDENTITY_HEADER, identity as dev_identity
-from m_dpp_common.auth.dev_role_stub import get_principal  # legacy, deprecated
-from m_dpp_common.auth.models import MembershipMixin, SubjectMixin
-from m_dpp_common.auth.principal import (
-    ANONYMOUS_ROLE_ENV,
-    anonymous_role,
-    make_get_principal,
-    organisation_role_names,
-    resolve_principal,
-)
-from m_dpp_common.auth.router import make_subjects_router
 
 __all__ = [
-    "SubjectMixin",
-    "MembershipMixin",
-    "make_get_principal",
-    "resolve_principal",
-    "organisation_role_names",
-    "anonymous_role",
-    "ANONYMOUS_ROLE_ENV",
     "dev_identity",
     "DEV_IDENTITY_HEADER",
     "acting_organisation",
     "ACTING_ORGANISATION_HEADER",
-    "make_subjects_router",
-    "get_principal",
 ]

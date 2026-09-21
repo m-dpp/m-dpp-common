@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+from fastapi import FastAPI
 from pydantic import ValidationError
 from sqlalchemy.orm import DeclarativeBase
 
@@ -54,8 +55,25 @@ def test_attr_keys_sql_rejects_unsafe_table():
         _attr_keys_sql("products; drop table roles")
 
 
-def test_router_exposes_dynamic_endpoints():
-    router = make_rbac_router(
+def _paths(router):
+    """Every (path, method) the router actually serves.
+
+    Read from the OpenAPI schema of an app the router is mounted on, rather than
+    from `router.routes`: roles and organisation-roles sit on sub-routers (so a
+    service without those tables can leave them out), and how FastAPI represents
+    an included router internally is not this test's business — what it serves is.
+    """
+    app = FastAPI()
+    app.include_router(router)
+    return {
+        (path, (method.upper(),))
+        for path, ops in app.openapi()["paths"].items()
+        for method in ops
+    }
+
+
+def _router(**kw):
+    return make_rbac_router(
         get_db=lambda: None,
         role_model=Role,
         attr_permission_model=AttrPermission,
@@ -64,16 +82,34 @@ def test_router_exposes_dynamic_endpoints():
         resource_permission_model=ResourcePermission,
         resource_tables={"products": _model("products"), "organisations": _model("organisations")},
         resource_types=["products", "organisations", "declarations"],
+        **kw,
     )
-    paths = {(r.path, tuple(sorted(r.methods))) for r in router.routes}
+
+
+def test_router_exposes_dynamic_endpoints():
+    paths = _paths(_router())
     assert ("/admin/rbac/roles", ("GET",)) in paths
     assert ("/admin/rbac/roles", ("POST",)) in paths
     assert ("/admin/rbac/roles/{name}", ("PATCH",)) in paths
+    assert ("/admin/rbac/organisation-roles", ("GET",)) in paths
+    assert ("/admin/rbac/organisation-roles", ("POST",)) in paths
     assert ("/admin/rbac/attributes", ("GET",)) in paths
     assert ("/admin/rbac/attributes", ("POST",)) in paths
     assert ("/admin/rbac/attributes/{attribute_id}", ("DELETE",)) in paths
     assert ("/admin/rbac/entity-types", ("GET",)) in paths
     assert ("/admin/rbac/sync-attrs", ("POST",)) in paths
+
+
+def test_a_service_without_a_roles_table_leaves_those_endpoints_out():
+    """Roles and their assignments live in m-dpp-identity. An app that mounts
+    this router has the attribute and resource matrices — which ARE per app —
+    and no `roles` table to serve."""
+    paths = _paths(_router(include_roles=False, include_organisation_roles=False))
+    assert not [p for p, _ in paths if "/roles" in p]
+    # the per-app matrices are untouched
+    assert ("/admin/rbac/permissions", ("GET",)) in paths
+    assert ("/admin/rbac/resource-permissions", ("GET",)) in paths
+    assert ("/admin/rbac/entity-types", ("GET",)) in paths
 
 
 @pytest.mark.parametrize("name", ["auditor", "data_steward", "r2"])

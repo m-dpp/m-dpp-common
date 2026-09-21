@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { ReactNode, createContext, useContext, useEffect, useMemo, useState } from "react";
+import type { RbacApi } from "../api/client";
 import { useApi } from "../api/context";
 import { usePrincipal } from "../api/principal";
 import type { AttrPermission, ResourceAction, ResourcePermission, Role } from "../api/types";
+import { useIdentity } from "../identity/context";
 import { Button } from "../design/Button";
 import { Card, CardBody, CardHeader } from "../design/Card";
 import { Chip, Tag } from "../design/Chip";
@@ -16,22 +18,49 @@ import { errorMessage, useAsync } from "../hooks/useAsync";
 import s from "./Rbac.module.css";
 
 type Tab = "roles" | "attributes" | "resources";
+type SourceKey = "app" | "identity";
+
+/**
+ * Which service's matrices are being edited.
+ *
+ * Attribute and resource permissions are **per entity type, and therefore per
+ * service**: dpp governs `products`, mdpp governs `declarations` and `tests`,
+ * and m-dpp-identity governs `organisations`, `subjects` and `rbac`. There is no
+ * one table to show, so the screen asks which.
+ *
+ * **Roles are not part of that split.** They live in identity and nowhere else,
+ * so the Roles tab always talks to identity whichever source is selected — the
+ * same role list is what every service's columns are rendered from.
+ */
+const RbacSourceCtx = createContext<RbacApi | null>(null);
+
+function useRbacApi(): RbacApi {
+  const api = useContext(RbacSourceCtx);
+  if (!api) throw new Error("useRbacApi: only valid inside <Rbac>");
+  return api;
+}
 
 export interface RbacProps {
   initialTab?: Tab;
   /** The resource type the host's policy uses for the access-control surface itself. */
   resourceType?: string;
+  /** What to call the host app in the source switch, e.g. "dpp-app". */
+  appLabel?: ReactNode;
 }
 
 /** Roles (dynamic data), attribute visibility per entity type, resource access. Every
  *  column here is rendered from the fetched roles — nothing is hardcoded. Reading the
  *  matrices needs `read` on `resourceType`; changing them needs `create`/`update`/`delete`. */
-export function Rbac({ initialTab = "attributes", resourceType = "rbac" }: RbacProps) {
-  const api = useApi();
+export function Rbac({ initialTab = "attributes", resourceType = "rbac", appLabel = "This app" }: RbacProps) {
+  const app = useApi();
+  const identity = useIdentity();
   const { can } = usePrincipal();
   const [tab, setTab] = useState<Tab>(initialTab);
-  const roles = useAsync(() => api.listRoles(), [api]);
+  const [source, setSource] = useState<SourceKey>("app");
+  // Roles come from identity whatever the selected source is.
+  const roles = useAsync(() => identity.listRoles(), [identity]);
   const activeRoles = useMemo(() => (roles.data ?? []).filter((r) => r.active), [roles.data]);
+  const sourceApi = source === "identity" ? identity : app;
 
   if (!can(resourceType, "read")) {
     return (
@@ -45,7 +74,7 @@ export function Rbac({ initialTab = "attributes", resourceType = "rbac" }: RbacP
   const perms = { create: can(resourceType, "create"), update: can(resourceType, "update"), delete: can(resourceType, "delete") };
 
   return (
-    <>
+    <RbacSourceCtx.Provider value={sourceApi}>
       <div className={s.toolbar}>
         <SegmentedControl<Tab>
           value={tab}
@@ -56,13 +85,30 @@ export function Rbac({ initialTab = "attributes", resourceType = "rbac" }: RbacP
             { value: "roles", label: "Roles", count: roles.data?.length },
           ]}
         />
+        {tab !== "roles" && (
+          <SegmentedControl<SourceKey>
+            value={source}
+            onChange={setSource}
+            options={[
+              { value: "app", label: appLabel },
+              { value: "identity", label: "Identity" },
+            ]}
+          />
+        )}
       </div>
       {roles.error && <Notice tone="error">{roles.error}</Notice>}
       {!perms.update && <Notice tone="info">Read-only: your roles may view these rules but not change them.</Notice>}
+      {tab !== "roles" && source === "identity" && (
+        <Notice tone="info">
+          Editing <strong>m-dpp-identity</strong>&rsquo;s own rules — who may read an
+          organisation&rsquo;s attributes, and who may administer identities. These apply to every
+          app, because there is one identity service behind all of them.
+        </Notice>
+      )}
       {tab === "roles" && <RolesPanel roles={roles.data ?? []} onChanged={roles.reload} perms={perms} />}
-      {tab === "attributes" && <AttributesPanel roles={activeRoles} perms={perms} />}
-      {tab === "resources" && <ResourcesPanel roles={activeRoles} perms={perms} />}
-    </>
+      {tab === "attributes" && <AttributesPanel key={source} roles={activeRoles} perms={perms} />}
+      {tab === "resources" && <ResourcesPanel key={source} roles={activeRoles} perms={perms} />}
+    </RbacSourceCtx.Provider>
   );
 }
 
@@ -71,7 +117,8 @@ export function Rbac({ initialTab = "attributes", resourceType = "rbac" }: RbacP
 type Perms = { create: boolean; update: boolean; delete: boolean };
 
 function RolesPanel({ roles, onChanged, perms }: { roles: Role[]; onChanged: () => Promise<void>; perms: Perms }) {
-  const api = useApi();
+  // Roles are defined in identity, not per app.
+  const api = useIdentity();
   const { refresh } = usePrincipal();
   const [adding, setAdding] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -130,7 +177,7 @@ function RolesPanel({ roles, onChanged, perms }: { roles: Role[]; onChanged: () 
 }
 
 function AddRoleModal({ open, onClose, onAdded }: { open: boolean; onClose: () => void; onAdded: () => Promise<void> }) {
-  const api = useApi();
+  const api = useIdentity();
   const [name, setName] = useState("");
   const [label, setLabel] = useState("");
   const [description, setDescription] = useState("");
@@ -184,7 +231,7 @@ const toAccess = (p: AttrPermission): Access => (p.can_write ? "rw" : p.can_read
 const fromAccess = (a: Access) => ({ can_read: a !== "none", can_write: a === "rw" });
 
 function AttributesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
-  const api = useApi();
+  const api = useRbacApi();
   const { refresh } = usePrincipal();
   const entityTypes = useAsync(() => api.listEntityTypes(), [api]);
   const [entityType, setEntityType] = useState<string>("");
@@ -341,7 +388,7 @@ function AttributesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
 }
 
 function AddAttributeModal({ open, entityType, onClose, onAdded }: { open: boolean; entityType: string; onClose: () => void; onAdded: () => Promise<void> }) {
-  const api = useApi();
+  const api = useRbacApi();
   const [key, setKey] = useState("");
   const [description, setDescription] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -389,7 +436,7 @@ function AddAttributeModal({ open, entityType, onClose, onAdded }: { open: boole
 const ACTIONS: ResourceAction[] = ["list", "read", "create", "update", "delete"];
 
 function ResourcesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
-  const api = useApi();
+  const api = useRbacApi();
   const { refresh } = usePrincipal();
   const resPerms = useAsync(() => api.listResourcePermissions(), [api]);
   const [err, setErr] = useState<string | null>(null);

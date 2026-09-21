@@ -79,11 +79,11 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
       }),
     [mdpp, effectivePrefix, level, status, lab, requestedBy, analysisType, includeWithdrawn, sort, pathScope],
   );
-  // Only organisations holding `laboratory`, AS MDPP KNOWS THEM: `laboratory_id`
-  // is a foreign key in mdpp's table, and the host app's ids are different rows.
-  const { organisations: labs } = useOrganisationsWithRole("laboratory", mdpp);
+  // `laboratory_id` and `requested_by` are m-dpp-identity organisation ids,
+  // which mdpp stores directly — one id per organisation, everywhere.
+  const { organisations: labs } = useOrganisationsWithRole("laboratory");
   // who COMMISSIONED the test, as distinct from who ran it
-  const { organisations: requesters } = useOrganisationsWithRole("economic_operator", mdpp);
+  const { organisations: requesters } = useOrganisationsWithRole("economic_operator");
 
   // Open on the organisation you are acting for — same reasoning as the
   // Declarations screen, and applied on change rather than on every render so
@@ -482,10 +482,9 @@ export interface RegisterTestProps {
  * them per level) mounts this instead of a second copy of the table.
  */
 export function RegisterTest({ gs1Path, onRegistered, label = "Register test here", resourceType = "tests" }: RegisterTestProps) {
-  const mdpp = useMdpp();
   const { can } = usePrincipal();
   const [open, setOpen] = useState(false);
-  const { organisations: labs } = useOrganisationsWithRole("laboratory", mdpp);
+  const { organisations: labs } = useOrganisationsWithRole("laboratory");
   if (!can(resourceType, "create")) return null;
   return (
     <>

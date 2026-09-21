@@ -17,6 +17,19 @@ Shape (v0.7):
 
 ``entity_type`` is an opaque string chosen by the service (e.g. ``"products"``);
 it is coarse — an entity, never a granularity level.
+
+**The role foreign key is optional.** Since m-dpp-identity, `roles` lives in one
+service and the apps keep only their own attribute and resource matrices. Those
+matrices still key on `role_name`, but there is no local table to point at, so
+an app sets ``__role_foreign_key__ = False`` on its subclass::
+
+    class AttrPermission(AttrPermissionMixin, Base):
+        __role_foreign_key__ = False
+
+The consequence is real and accepted: deleting a role in identity no longer
+cascades to an app's permission rows, so an app can hold rows naming a role that
+no longer exists. They match nothing and are harmless — and a cross-service
+cascade was never available anyway.
 """
 
 import uuid
@@ -39,6 +52,17 @@ from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 
 ATTR_ORIGIN_DISCOVERED = "discovered"
 ATTR_ORIGIN_MANUAL = "manual"
+
+
+def _role_fk(cls) -> tuple:
+    """The `roles.name` foreign key, unless the service has no `roles` table.
+
+    Returned as a tuple to splat into `mapped_column`, and built fresh per
+    binding — a ForeignKey instance can only belong to one Column.
+    """
+    if getattr(cls, "__role_foreign_key__", True):
+        return (ForeignKey("roles.name", ondelete="CASCADE"),)
+    return ()
 
 
 class RoleMixin:
@@ -102,9 +126,11 @@ class AttrPermissionMixin:
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     entity_type: Mapped[str] = mapped_column(String, nullable=False)
     attr_key: Mapped[str] = mapped_column(String, nullable=False)
-    role_name: Mapped[str] = mapped_column(
-        String, ForeignKey("roles.name", ondelete="CASCADE"), nullable=False
-    )
+
+    @declared_attr
+    def role_name(cls) -> Mapped[str]:
+        return mapped_column(String, *_role_fk(cls), nullable=False)
+
     can_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     can_write: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
@@ -129,9 +155,10 @@ class OrganisationRoleMixin:
         ForeignKey("organisations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    role_name: Mapped[str] = mapped_column(
-        String, ForeignKey("roles.name", ondelete="CASCADE"), nullable=False
-    )
+
+    @declared_attr
+    def role_name(cls) -> Mapped[str]:
+        return mapped_column(String, *_role_fk(cls), nullable=False)
 
 
 class ResourcePermissionMixin:
@@ -143,9 +170,11 @@ class ResourcePermissionMixin:
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     resource_type: Mapped[str] = mapped_column(String, nullable=False)
-    role_name: Mapped[str] = mapped_column(
-        String, ForeignKey("roles.name", ondelete="CASCADE"), nullable=False
-    )
+
+    @declared_attr
+    def role_name(cls) -> Mapped[str]:
+        return mapped_column(String, *_role_fk(cls), nullable=False)
+
     can_list: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     can_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     can_create: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

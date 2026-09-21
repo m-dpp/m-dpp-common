@@ -1,8 +1,8 @@
 import { useEffect } from "react";
-import { useApi } from "../api/context";
+import { useIdentity } from "../identity/context";
 import { useActingAs, useActingOrganisation } from "../api/identity";
 import { usePrincipal } from "../api/principal";
-import type { Role } from "../api/types";
+import type { Role, Subject } from "../api/types";
 import { Chip } from "../design/Chip";
 import { Select } from "../design/Field";
 import { useAsync } from "../hooks/useAsync";
@@ -27,7 +27,7 @@ export interface ActingAsSwitcherProps {
  * authority of exactly one organisation.
  */
 export function ActingAsSwitcher({ roles }: ActingAsSwitcherProps) {
-  const api = useApi();
+  const api = useIdentity();
   const [actingAs, setActingAs] = useActingAs();
   const [actingOrg, setActingOrg] = useActingOrganisation();
   const { principal, loading, error } = usePrincipal();
@@ -59,7 +59,7 @@ export function ActingAsSwitcher({ roles }: ActingAsSwitcherProps) {
         <option value="">— anonymous —</option>
         {(subjects.data ?? []).map((sub) => (
           <option key={sub.id} value={sub.sub}>
-            {(sub.display_name || sub.sub) + (sub.membership?.organisation ? ` · ${sub.membership.organisation.name}` : " · not linked")}
+            {(sub.display_name || sub.sub) + describeMemberships(sub)}
           </option>
         ))}
       </Select>
@@ -78,9 +78,9 @@ export function ActingAsSwitcher({ roles }: ActingAsSwitcherProps) {
           >
             <option value="">— choose an organisation —</option>
             {(principal?.organisations ?? []).map((o) => (
-              // prefer the cross-service key: this value is sent to EVERY API the
-              // app talks to, and an id from one service is meaningless to another
-              <option key={o.id} value={o.key ?? o.id}>
+              // identity's id, which every service understands: there is one
+              // organisation row now, so the id IS the cross-service name
+              <option key={o.id} value={o.id}>
                 {o.name}
                 {o.is_org_admin ? "  (admin)" : ""}
               </option>
@@ -121,4 +121,16 @@ export function ActingAsSwitcher({ roles }: ActingAsSwitcherProps) {
       </div>
     </div>
   );
+}
+
+/** What to say after a subject's name in the identity picker.
+ *
+ * A subject may act for several organisations, so naming only the first would
+ * hide the very case the switcher above exists for. Not linked at all is worth
+ * saying outright: that subject resolves to the anonymous role everywhere. */
+function describeMemberships(sub: Subject): string {
+  const names = sub.memberships.map((m) => m.organisation?.name).filter(Boolean);
+  if (!names.length) return " · not linked";
+  if (names.length === 1) return ` · ${names[0]}`;
+  return ` · ${names.length} organisations`;
 }

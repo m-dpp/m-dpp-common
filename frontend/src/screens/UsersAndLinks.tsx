@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useApi } from "../api/context";
+import { useIdentity } from "../identity/context";
 import { usePrincipal } from "../api/principal";
 import type { Subject } from "../api/types";
 import { RoleChips } from "../components/RoleChips";
@@ -26,7 +26,7 @@ export interface UsersAndLinksProps {
 }
 
 export function UsersAndLinks({ resourceType = "subjects" }: UsersAndLinksProps) {
-  const api = useApi();
+  const api = useIdentity();
   const { refresh: refreshPrincipal, principal, can } = usePrincipal();
   const mayCreate = can(resourceType, "create");
   const mayDelete = can(resourceType, "delete");
@@ -183,7 +183,7 @@ export function UsersAndLinks({ resourceType = "subjects" }: UsersAndLinksProps)
 }
 
 function CreateSubjectModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: () => Promise<void> }) {
-  const api = useApi();
+  const api = useIdentity();
   const [sub, setSub] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -230,7 +230,7 @@ function CreateSubjectModal({ open, onClose, onCreated }: { open: boolean; onClo
 }
 
 function LinkModal({ subject, organisations, onClose, onDone }: { subject: Subject | null; organisations: { id: string; name: string }[]; onClose: () => void; onDone: () => Promise<void> }) {
-  const api = useApi();
+  const api = useIdentity();
   const [orgId, setOrgId] = useState("");
   const [isOrgAdmin, setIsOrgAdmin] = useState(false);
   const [err, setErr] = useState<string | null>(null);

@@ -1,21 +1,26 @@
 # m-dpp-common
 
-Shared **libraries** for the mDPP services (`dpp-app`, `mdpp-app`, `passport-app`). Two halves,
-one repo, no runtime of its own:
+Shared **libraries** for the mDPP services (`dpp-app`, `mdpp-app`, `passport-app`,
+`m-dpp-identity`). Two halves, one repo, no runtime of its own:
 
 ```
 m-dpp-common/
   backend/    Python package `m_dpp_common`  — GS1 validators, DB plumbing, ORM mixins,
-              the organisation entity, subjects/memberships + principal resolution (auth seam),
-              the RBAC engine + JSON admin router
+              the m-dpp-identity CLIENT + auth seam, the RBAC engine + JSON admin router
   frontend/   npm package `@m-dpp/ui`          — design tokens + primitives, AppShell, the
-              generic AttrsEditor, the API client contract, and the admin screens every app
-              needs identically (Login, Organisations, Users & links, RBAC, "acting as")
+              generic AttrsEditor, the API client contracts (app + identity + mdpp), and the
+              admin screens every app needs identically (Login, Organisations, Users & links,
+              RBAC, "acting as")
   doc/meta/   CLAUDE.md / DESIGN.md (system context + this repo's design reference)
 ```
 
-Neither half is an application. Each consuming app has its **own** tables, its **own** rows,
-its **own** front-end; this repo provides the shape and the logic they must not let diverge.
+Neither half is an application.
+
+**Organisations, subjects, memberships and roles are no longer here.** They moved to
+**m-dpp-identity**, a service both apps call. They used to be mixins each app bound to its own
+tables, which meant the same company existed twice with two ids — see that repo's `DESIGN.md` §1
+for what that cost. What this repo keeps is the *client* for reaching identity, and the RBAC
+engine, whose attribute and resource matrices genuinely are per app.
 
 ## Charter — what belongs here
 
@@ -41,54 +46,82 @@ Only cross-cutting *plumbing* that must not diverge between services:
   `validate_gtin(v, pedantic=True)` overrides the environment for one call.
 - `m_dpp_common.db` — async engine / session-factory / `get_db` builders.
 - `m_dpp_common.orm` — `Base`-agnostic SQLAlchemy mixins (UUID PK, timestamps, soft-delete, `attrs`, `apply_attrs_patch`).
-- `m_dpp_common.organisation` — the **Organisation** entity: `OrganisationMixin`, create/update schemas, a parametrised `/organisations` CRUD router. Nature comes solely from assigned roles; a **GLN is optional and lives in `attrs["gln"]`**; `PATCH {"active": false|true}` deactivates/reactivates; `GET /organisations?include_removed=true` lists inactive ones too.
-- `m_dpp_common.auth` — the **auth seam** (see below): `SubjectMixin`, `MembershipMixin`, `resolve_principal` / `make_get_principal`, the dev identity source, and `make_subjects_router` (`/subjects`, `/memberships`, `/me`).
+- `m_dpp_common.identity` — the **m-dpp-identity client** and the auth seam built on it (see below): `IdentityClient`, `make_get_principal`, `PrincipalCache`, `wait_for_identity`. This is the whole of an app's runtime dependency on identity.
+- `m_dpp_common.auth` — the two request-scoped sources the seam resolves *from*: the dev identity source (`X-Dev-Sub`) and the acting-organisation selector (`X-Acting-Org`).
 - `m_dpp_common.rbac` — the two-layer **RBAC engine** (resource gate + attribute filter), role seed data, fan-out helpers, and the parametrised **JSON** admin router under `/admin/rbac` (roles, attributes registry, attribute permissions, resource permissions, organisation-roles). The admin *UI* is the shared React screen in `frontend/`; there is no server-rendered dashboard any more.
-  - **Roles are data** (`roles` table). The JRC list is only the initial seed. An unknown or inactive role is 403 at the resource gate.
+  - **Roles are data**, and since m-dpp-identity they live *there*. `JRC_ROLES` and `rbac/platform.py` stay here as the one definition identity seeds roles from and the apps seed their default permissions from. An app passes `include_roles=False, include_organisation_roles=False` to `make_rbac_router` and sets `__role_foreign_key__ = False` on its permission models, because it has no local `roles` table to point at.
   - **Attribute rules are keyed `(entity_type, attr_key, role_name)`**; `entity_type` is a coarse, service-chosen string, never a granularity level. Resolve inheritance first, then filter.
   - **Attribute registry** (`rbac_attributes`): discovered from stored `attrs` (`POST /sync-attrs`) or registered manually (`POST /attributes`, e.g. computed fields). Sync never deletes.
   - **Several roles, union semantics.** A principal carries `roles` (the organisation's roles); an action is allowed if any held role allows it, a key readable/writable if any role may. Every call point accepts one role name or a list.
   - Writes are **rejected (403)**, never trimmed; PATCH bodies merge `attrs` (`null` removes a key).
 
 ### What must NOT come here
-Anything domain-specific: the identity tree (model/variant/batch/item), inheritance resolution, composition claims, the fibre taxonomy, per-service `@context` documents, per-service permission *matrices*, per-service screens (products, declarations…).
+Anything domain-specific: the identity tree (model/variant/batch/item), inheritance resolution, composition claims, the fibre taxonomy, per-service `@context` documents, per-service permission *matrices*, per-service screens (products, declarations…). And, since this round, the identity **tables** — organisations, subjects, memberships, roles — which belong to m-dpp-identity.
 
 ---
 
 ## The auth seam
 
 ```
-identity source ──► subject ──► membership ──► organisation ──► roles ──► principal
- (X-Dev-Sub)        subjects     memberships     organisations   organisation_roles
- TEMPORARY          ─────────────── real, stays ────────────────────────────────►
+identity source ─┐
+ (X-Dev-Sub)     ├──► IdentityClient ──► m-dpp-identity ──► principal
+acting org ──────┘        (HTTP)          subjects · memberships
+ (X-Acting-Org)                           organisations · roles
+ TEMPORARY: only the identity source
 ```
 
-- A **subject** is a known identity (`sub`, unique — what an OIDC token will carry). Created by hand for now (`POST /subjects`).
-- A **membership** links a subject to the **one** organisation it represents. **The organisation's roles are the subject's authority.** No per-user roles.
-- `resolve_principal(sub, db, ...)` returns `{sub, anonymous, reason, subject, organisation, roles, role}`. No identity, an unknown or unlinked subject, or an organisation without an active role resolves to the **anonymous role** (`RBAC_ANONYMOUS_ROLE`, default `public`) — a floor, never a privileged default. Nothing else about a role is hardcoded.
-- **Only `m_dpp_common/auth/dev_identity.py` is temporary.** It reads the `X-Dev-Sub` header. Swapping to real auth = passing a JWT-validating dependency as `make_get_principal(identity=...)`. Nothing downstream changes.
-- `m_dpp_common.auth.get_principal` (the old `X-Dev-Role` stub) is kept for one release for services that have not migrated.
+Two questions, two mechanisms, and they must not be conflated:
 
-Binding it in a service:
+- **who is this request?** — the identity source. Not the caller's to choose: it is *proved*.
+- **which of my organisations am I acting for?** — the acting selector. It **is** the caller's to
+  choose, among memberships they hold. Identity refuses a choice they do not hold, so it grants
+  nothing on its own.
+
+`resolve_principal` itself now lives in m-dpp-identity. An app builds its dependency like this:
 
 ```python
-class Subject(SubjectMixin, Base): pass
-class Membership(MembershipMixin, Base): pass
+from m_dpp_common.identity import IdentityClient, make_get_principal, wait_for_identity
 
-get_principal = make_get_principal(
-    get_db=get_db, subject_model=Subject, membership_model=Membership,
-    organisation_model=Organisation, organisation_role_model=OrganisationRole, role_model=Role,
-)
-app.include_router(make_subjects_router(
-    get_db=get_db, get_principal=get_principal, subject_model=Subject, membership_model=Membership,
-    organisation_model=Organisation, organisation_role_model=OrganisationRole, role_model=Role,
-    resource_permission_model=ResourcePermission, resource_types=["products", "organisations"],
-))
+identity_client = IdentityClient()          # IDENTITY_API_BASE + IDENTITY_SERVICE_TOKEN
+get_principal = make_get_principal(client=identity_client)
+#   make_get_principal(client=..., identity=<jwt dependency>)   ← the production switch
 ```
 
-**Gating (0.10+).** Pass `rbac_engine=` to `make_subjects_router` and `get_principal=` + `rbac_engine=` to `make_rbac_router`, and seed a policy for the resource types `subjects` and `rbac`: subject/membership writes and every RBAC admin endpoint then pass the resource gate (GET → read/list, POST → create, PATCH → update, DELETE → delete). Reference reads stay open — `GET /subjects` and `GET /me` (the dev switcher needs them before an identity is chosen), `GET /admin/rbac/roles`, `/entity-types` and `/organisation-roles` (role labels and an organisation's nature are public data). Without those arguments the routers are open, as before.
+The principal dict is unchanged from a route's point of view: `{sub, anonymous, reason, subject,
+organisation, is_org_admin, organisations, roles, role}`. No identity, an unknown or unlinked
+subject, or an organisation without an active role resolves to the **anonymous role**
+(`RBAC_ANONYMOUS_ROLE`, default `public`) — a floor, never a privileged default.
 
-`seed_rbac(resource_defaults=...)` accepts, per role, either a flat permission dict (same for every resource type) or a dict keyed by resource type with a `"*"` fallback, e.g. `{"products": FULL, "rbac": NONE, "*": READ}`. The seed role list includes `administrator` (manages roles, access rules, identities) — grant it to the organisation that runs the instance.
+**An outage is never a permission change.** If identity cannot be reached, `get_principal` raises
+**503**. It deliberately does not fall back to `public`, which would turn an outage into a silent
+demotion and tell the user their *role* was the problem.
+
+**The cache.** This runs on every request that needs a principal, so the answer is cached for a few
+seconds, keyed on `(sub, acting_org)` — long enough to collapse a burst of calls from one page,
+short enough that a membership change takes effect while the administrator is still looking at the
+screen. `IDENTITY_PRINCIPAL_CACHE_TTL=0` disables it. Failures are never cached, so a blip does not
+lock an app out for the length of the TTL.
+
+**Startup.** `await wait_for_identity(client)` in the app's lifespan polls `/health`. Giving up
+does **not** stop the app booting: a backend that refuses to start because identity is slow is a
+backend nobody can debug, and every request reports 503 with a clear reason anyway.
+
+| variable | what it is |
+|---|---|
+| `IDENTITY_API_BASE` | where identity is, e.g. `http://identity:8000` |
+| `IDENTITY_SERVICE_TOKEN` | the shared secret proving this process is a trusted service. **Must match identity's.** Without it every principal resolves anonymous, and the client says so rather than letting the user's role take the blame |
+| `IDENTITY_HTTP_TIMEOUT` | seconds, default 5 |
+| `IDENTITY_PRINCIPAL_CACHE_TTL` | seconds, default 5; `0` disables the cache |
+
+**Gating.** Pass `get_principal=` + `rbac_engine=` to `make_rbac_router` and seed a policy for the
+`rbac` resource type: every RBAC admin endpoint then passes the resource gate (GET → read/list,
+POST → create, PATCH → update, DELETE → delete). Reference reads stay open — `GET
+/admin/rbac/roles`, `/entity-types` and `/organisation-roles`, because role labels and an
+organisation's nature are public data. Without those arguments the router is open.
+
+`seed_rbac(resource_defaults=...)` accepts, per role, either a flat permission dict (same for every
+resource type) or a dict keyed by resource type with a `"*"` fallback, e.g.
+`{"products": FULL, "rbac": NONE, "*": READ}`.
 
 ---
 
@@ -97,7 +130,7 @@ app.include_router(make_subjects_router(
 Each service pins a tag in its `requirements.txt` (public repo → plain `git+https`, note the `subdirectory`):
 
 ```
-m-dpp-common @ git+https://github.com/m-dpp/m-dpp-common@v0.10.0#subdirectory=backend
+m-dpp-common @ git+https://github.com/m-dpp/m-dpp-common@v0.12.0#subdirectory=backend
 ```
 
 Working on it locally:
@@ -159,23 +192,62 @@ React is a **peer dependency** of this package; never bundle a second copy.
 
 ```tsx
 import "@m-dpp/ui/tokens.css";   // or rely on the import in the package entry
-import { ApiProvider, PrincipalProvider, AppShell, ActingAsSwitcher, Organisations, UsersAndLinks, Rbac, Login } from "@m-dpp/ui";
+import { ApiProvider, IdentityProvider, PrincipalProvider, AppShell, ActingAsSwitcher,
+         Organisations, UsersAndLinks, Rbac, Login } from "@m-dpp/ui";
 
 <ApiProvider baseUrl={import.meta.env.VITE_API_BASE ?? "/api"}>
-  <PrincipalProvider>
-    <AppShell brand={{ name: "dpp-app" }} nav={...} activeKey={...} onNavigate={...}
-              sidebarFooter={<ActingAsSwitcher roles={roles} />}>
-      <Organisations />  ...
-    </AppShell>
-  </PrincipalProvider>
+  <IdentityProvider baseUrl={import.meta.env.VITE_IDENTITY_API_BASE ?? "/identity-api"}>
+    <PrincipalProvider>
+      <AppShell brand={{ name: "dpp-app" }} nav={...} activeKey={...} onNavigate={...}
+                sidebarFooter={<ActingAsSwitcher roles={roles} />}>
+        <Organisations />  ...
+      </AppShell>
+    </PrincipalProvider>
+  </IdentityProvider>
 </ApiProvider>
 ```
 
-`useApi()` gives screens the client; `usePrincipal()` gives `{principal, can(resource, action), refresh}` so a host can hide/disable actions the resolved roles may not perform. `useActingAs()` reads/sets the identity the UI acts as (dev only). The shared screens gate themselves with `can()` on a `resourceType` prop (`Organisations` → `organisations` plus `rolesResourceType` `rbac` for role assignment, `UsersAndLinks` → `subjects`, `Rbac` → `rbac`); a host hides nav entries the same way.
+**Both providers are required.** `IdentityProvider` is not optional the way `MdppProvider` is: every
+app resolves its principal through identity, and the Organisations, Users & links, Roles and
+acting-as screens have nowhere else to read from. A host that omits it gets a thrown error rather
+than a degraded mode, because that is a configuration mistake and not a deployment choice.
 
-### API client contract (`src/api`)
+`useApi()` gives screens the host app's client; `useIdentity()` gives the identity client;
+`usePrincipal()` gives `{principal, can(resource, action), refresh}` so a host can hide or disable
+actions the resolved roles may not perform. `useActingAs()` reads/sets the identity the UI acts as
+(dev only). The shared screens gate themselves with `can()` on a `resourceType` prop
+(`Organisations` → `organisations` plus `rolesResourceType` `rbac` for role assignment,
+`UsersAndLinks` → `subjects`, `Rbac` → `rbac`); a host hides nav entries the same way.
 
-`AdminApiClient` is a small typed interface: organisations, roles, organisation-roles, subjects, memberships, `me()`, RBAC entity types / attributes / attribute permissions / resource permissions / sync. `createFetchClient({ baseUrl = "/api", getIdentity })` is the default implementation against the shared backend routers (`/organisations`, `/admin/rbac/*`, `/subjects`, `/memberships`, `/me`); `paths` can remap them. No absolute URLs anywhere — the app decides the base (default relative `/api`, so a dev proxy or reverse proxy keeps everything same-origin and CORS stays off).
+### API client contracts (`src/api`, `src/identity`)
+
+Three clients, because there are three backends a front-end may talk to, each on its own relative
+path so everything stays same-origin behind the host's proxy:
+
+| client | base | serves |
+|---|---|---|
+| `AdminApiClient` (`useApi`) | `/api` | the host app: `me()` and its **own** RBAC matrices |
+| `IdentityApiClient` (`useIdentity`) | `/identity-api` | organisations, subjects, memberships, roles, keys, lab config, audit, and identity's own matrices |
+| `MdppApiClient` (`useMdpp`) | `/mdpp-api` | declarations, tests, comparison, the fibre taxonomy |
+
+`RbacApi` is the slice both `AdminApiClient` and `IdentityApiClient` implement — the attribute and
+resource matrices — which is what lets **one** `Rbac` screen point at either. Its source switch
+does exactly that; the Roles tab always talks to identity, because roles are defined there and
+nowhere else.
+
+**`me()` is on two of them and they are not duplicates.** The principal (subject, acting
+organisation, roles) is identity's answer and is authoritative. The `permissions` map is merged
+from both, because each service answers for the resource types it governs: identity for
+`organisations` / `subjects` / `rbac`, the app for `products`, `declarations` and so on. A UI that
+asked only its app would hide the Organisations screen; one that asked only identity would hide
+Products. `rbac` is reported by both and they agree, because both seed it from
+`m_dpp_common.rbac.platform`.
+
+**The browser never holds the service token.** Resolving a principal for an *arbitrary* subject is
+an app-backend capability; from the browser, `me()` resolves only the current identity.
+
+No absolute URLs anywhere — the app decides each base, so a dev proxy or reverse proxy keeps
+everything same-origin and CORS stays off.
 
 ### Design tokens and primitives (`src/design`)
 
@@ -241,6 +313,8 @@ The base path is **relative** (default `/mdpp-api`), never a host and port: the 
 
 The client covers declarations (list by prefix/level, current, history, new version, withdraw), tests (list with filters, register with `lab_id` + `ticket`, refresh, result, withdraw), the **comparison** endpoint, batched per-path **counts** for tree annotations, and the fibre taxonomy for the composition picker. `comparisons(paths)` is one request per identifier — mdpp is flat and answers about exactly one — with a path that has nothing on it resolving to `null` rather than rejecting the batch.
 
+It carries **no organisation endpoints**. It used to, because mdpp kept its own organisation table and anything that became an mdpp foreign key (`laboratory_id` on a test) had to be an id mdpp issued. Organisations live in m-dpp-identity now: one row, one id, understood by every service, so a laboratory picker reads identity and the value it produces is valid everywhere.
+
 ### The Comparison renderer (`src/components/Comparison`)
 
 ```tsx
@@ -300,3 +374,5 @@ Both are shown **resolved**: the tree badges each node's effective tolerance and
 ## Versioning
 
 SemVer. Bump `version` in `backend/pyproject.toml` and `frontend/package.json` together, tag `vX.Y.Z`, push the tag, then bump the pin in each consuming service in its own PR — that is what keeps the services independently deployable.
+
+**0.12.0 is a breaking change.** Organisations, subjects, memberships and roles left this library for m-dpp-identity. A consuming service must: drop those model bindings and the routers that served them; build `get_principal` from `m_dpp_common.identity` instead of `m_dpp_common.auth`; pass `include_roles=False, include_organisation_roles=False` to `make_rbac_router`; and set `__role_foreign_key__ = False` on its `AttrPermission` and `ResourcePermission` models, which no longer have a local `roles` table to reference.

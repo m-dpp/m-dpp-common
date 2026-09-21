@@ -4,13 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "m-dpp-common"
-version = "0.11.0"
-description = "Shared infrastructure for the mDPP services: GS1 identifiers, DB plumbing, ORM mixins, auth seam (subjects, memberships, principal resolution), RBAC engine, Organisation entity. Infrastructure only — no domain logic."
+version = "0.12.0"
+description = "Shared infrastructure for the mDPP services: GS1 identifiers, DB plumbing, ORM mixins, the m-dpp-identity client + auth seam, and the RBAC engine. Infrastructure only — no domain logic, and no identity tables: those live in m-dpp-identity."
 requires-python = ">=3.11"
 dependencies = [
     "fastapi",
     "sqlalchemy[asyncio]",
     "pydantic",
+    # the identity client — an app's whole runtime dependency on m-dpp-identity
+    "httpx",
 ]
 
 [project.optional-dependencies]

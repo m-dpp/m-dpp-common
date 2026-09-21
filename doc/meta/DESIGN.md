@@ -1,42 +1,99 @@
 # mdpp-common — Design Reference
 
-The shared library used by dpp-app and mdpp-app. Owns the **organisation** entity, the **RBAC**
-engine + roles, and the **OIDC/JWT auth** seam. `CLAUDE.md` (this repo) is the briefing; this is the
-full reference. For the system-wide picture, see the shared block at the top of `CLAUDE.md`.
+The shared library used by dpp-app, mdpp-app and m-dpp-identity. Owns the **RBAC engine**, the
+**platform role/permission definition**, the **m-dpp-identity client** + auth seam, and the shared
+admin UI. `CLAUDE.md` (this repo) is the briefing; this is the full reference. For the system-wide
+picture, see the shared block at the top of `CLAUDE.md`.
 
-**Golden rule:** this library **imports neither app** and is **entity-agnostic** — it operates on
+**Golden rule:** this library **imports no app** and is **entity-agnostic** — it operates on
 `(entity_type, attribute)` and stored role data, never on any app's specific models. A change here
-ripples to both consuming apps; if it would force a client-app change, that must be raised and
-approved before doing it.
+ripples to every consumer; if it would force a client change, that must be raised and approved
+before doing it.
 
 ---
 
-## 1. Organisation
+## 1. Identity is not here any more
 
-- Identity = surrogate **UUID id**. **GLN is optional and lives in `attrs`** — not every
-  organisation has one (a laboratory may not be a GS1 member). GLN is never required, never an RBAC
-  key.
-- **Type comes from assigned roles**, not an `operator_type` (removed). A lab = organisation with the
-  `laboratory` role; a manufacturer = `economic_operator`; etc.
-- Each consuming app has its OWN organisation table (same shape via the library, separate data).
-  Organisations correspond across apps via **OAuth identity**, not a service link.
-- RBAC references organisations by **internal id (UUID)**, never GLN.
+Organisations, subjects, memberships, roles and role assignments used to live in this library as
+mixins, and each consuming app bound them to its own tables. That meant the same company existed
+twice, with two different UUIDs, kept in step by hand — and every consequence that followed:
+double provisioning, a "same `sub` in both apps" convention, users linked in one app and `public`
+in the other, hand-synced roles behind a drift checksum, and `Organisation.external_key` plus a
+browser-side reconciliation screen whose only purpose was to detect the drift.
 
-### User <-> organisation
-OAuth provides the user (`sub`). A small **membership** table links `sub -> organisation`. **A user
-represents an organisation; the organisation's role is the authority.** No per-user-within-org roles
-for the MVP (deferred). `get_principal` (shared seam): token -> `sub` -> organisation (+ its roles) =
-the principal. Auth is OIDC/JWT; a combined deployment can point both apps at the same identity
-provider without either depending on the other.
+They now live in **m-dpp-identity**, a service both apps call. That repo's `DESIGN.md` §1–§4 is the
+reference for what they are; this section says only what the library still owns of them, which is
+**how to reach them**.
 
-## 2. Roles — dynamic, stored data
+### 1.1 The client
 
-Roles must be **data, addable at runtime**, not a hardcoded enum. A `roles` table (or equivalent)
-stores role records. Seed the known ones idempotently on startup — `public`,
-`end_user_professional`, `recycler`, `supply_chain_professional`, `authority`, `economic_operator`,
-`laboratory` — as **seed data**, so new roles can be added later via the admin API/UI with no code
-change. Remove hardcoded role references throughout, **including the dashboard**, which must render
-role columns/options dynamically from stored roles. Admin endpoints: list/create/deactivate roles.
+`m_dpp_common.identity.IdentityClient` is the whole of an app's runtime dependency on identity: a
+typed async httpx client, configured by `IDENTITY_API_BASE` and `IDENTITY_SERVICE_TOKEN`. It is
+deliberately small — resolve a principal, look an organisation up, read a laboratory's
+configuration. Everything else about identity is administered from the browser, through the shared
+screens.
+
+Two failure modes are distinguished, because they need different answers:
+
+- **`IdentityUnavailable`** — identity could not be reached, or answered 5xx. The app does not know
+  who the caller is and says so with a **503**.
+- **an anonymous principal** — identity answered, and the answer is that this subject resolves to
+  nothing. A normal reply, carrying a `reason` the UI shows.
+
+**The app must never collapse the first into the second.** Falling back to `public` on an outage
+turns an infrastructure failure into a silent permission change, and a write refused because "you
+are public" is a far worse diagnosis than "identity is down".
+
+### 1.2 The cache
+
+Principal resolution is on the hot path of every request that needs to know who is asking, so
+without a cache one page of thirty API calls is thirty round trips. `PrincipalCache` holds an
+answer for a few seconds (`IDENTITY_PRINCIPAL_CACHE_TTL`, default 5), keyed on
+`(sub, acting_org)` — long enough to collapse a burst, short enough that a membership change takes
+effect while the administrator is still looking at the screen.
+
+Negative answers are cached on the same terms: an unknown subject is a question asked just as often
+as a known one. **Failures are not cached at all**, so a blip cannot lock an app out for the length
+of the TTL.
+
+### 1.3 Startup
+
+`wait_for_identity` polls `/health` in an app's lifespan. **Giving up does not stop the app
+booting.** A backend that refuses to start because identity is slow is a backend nobody can debug,
+and every request reports 503 with a clear reason anyway — which is more useful than a container
+that exits.
+
+### 1.4 What the library still defines about identity
+
+The two request-scoped sources the seam resolves *from*, and only those:
+
+- `m_dpp_common.auth.dev_identity` — the `X-Dev-Sub` header. **The one temporary piece.** Swapping
+  to real authentication means passing a JWT-validating dependency to `make_get_principal`.
+- `m_dpp_common.auth.acting_organisation` — the `X-Acting-Org` selector. **Not temporary.** Which
+  of your organisations you act for is your choice to make, and it survives real authentication
+  unchanged — it just travels in a session or token claim instead of a header.
+
+Keeping them separate is what makes the acting-as switcher a real control rather than a development
+trick: switching context must change authority and ownership without touching who you are, and
+changing who you are must not silently carry an organisation over.
+
+## 2. Roles — dynamic, stored data, and stored in identity
+
+Roles must be **data, addable at runtime**, not a hardcoded enum. The `roles` table lives in
+m-dpp-identity; what stays here is `rbac/platform.py` and `JRC_ROLES`, the **one definition**
+identity seeds roles from and the apps seed their default permissions from. Seeding is idempotent,
+so new roles can be added later via the admin API/UI with no code change. No hardcoded role
+references anywhere, including the screens, which render role columns dynamically from the fetched
+list. Admin endpoints (list/create/deactivate) are identity's.
+
+**A consequence for the apps.** An app's permission rows key on `role_name` as a plain string, with
+no local table to join against, so the mixins' `roles.name` foreign key is optional
+(`__role_foreign_key__ = False`). Deleting a role in identity therefore no longer cascades to an
+app's permission rows. An orphaned row matches nothing and is harmless — and a cross-service
+cascade was never available in the first place.
+
+The apps' RBAC engines also drop `role_model`: the unknown/inactive-role check it performed is
+already done upstream, because a principal arrives from identity carrying only active role names.
 
 Roles are **actor identities**; access differentiation lives in the permission engine, not in role
 names. A *small*, clearly-marked amount of role special-casing is acceptable only where genuinely
@@ -94,13 +151,51 @@ before applying, migrating existing role/permission data into the dynamic struct
 re-keyed to `(entity_type, attribute)` — confirm the mapping if the existing data is ambiguous). Keep
 the engine entity-agnostic.
 
-## 6. Trust / verifiability (roadmap)
+## 6. The front-end's three clients
 
-The organisation model is where a lab's **public key / DID** will live for signing (a GLN-less lab
-signs with its key/DID — matches UNTP's issuer=DID model). Claims are designed as signable objects;
-signing / VC issuance is roadmap, not MVP.
+A front-end may talk to three backends, each on its own **relative** path so everything stays
+same-origin behind the host's proxy and no CORS is involved:
 
-## 7. Open questions
+| client | base | serves |
+|---|---|---|
+| `AdminApiClient` (`useApi`) | `/api` | the host app: `me()` and its **own** RBAC matrices |
+| `IdentityApiClient` (`useIdentity`) | `/identity-api` | organisations, subjects, memberships, roles, keys, lab config, audit |
+| `MdppApiClient` (`useMdpp`) | `/mdpp-api` | declarations, tests, comparison, the fibre taxonomy |
+
+`RbacApi` is the slice both the app client and the identity client implement — the attribute and
+resource matrices — which is what lets **one** `Rbac` screen point at either. Its source switch does
+exactly that; the Roles tab always talks to identity, because roles are defined there and nowhere
+else.
+
+**`IdentityProvider` is not optional**, unlike `MdppProvider`. Every app resolves its principal
+through identity, and the shared screens have nowhere else to read from, so a host that omits it
+gets a thrown error rather than a degraded mode — that is a configuration mistake, not a deployment
+choice.
+
+### 6.1 Two `/me` calls, merged
+
+The principal (subject, acting organisation, roles) is identity's answer and is authoritative. The
+`permissions` map is assembled from **both** services, because each governs different resource
+types: identity answers for `organisations`, `subjects` and `rbac`; the app answers for `products`,
+`declarations` and so on.
+
+Merged rather than chosen between: a UI that asked only its app would hide the Organisations
+screen, and one that asked only identity would hide Products. Neither service is wrong — they are
+answering about different things. `rbac` is reported by both, and they agree because both seed it
+from `rbac/platform.py`.
+
+**The browser never holds the service token.** Resolving a principal for an *arbitrary* subject is
+an app-backend capability; from the browser, `me()` resolves only the current identity.
+
+## 7. Trust / verifiability (roadmap)
+
+A laboratory's **public keys** live on its organisation in m-dpp-identity, addressed by `kid` and
+rotated rather than replaced (a GLN-less lab signs with its key or DID — matching UNTP's
+issuer=DID model). Claims are designed as signable objects; signing and VC issuance are roadmap,
+not MVP. This library will carry the verification helpers when there is something to verify.
+
+## 8. Open questions
 
 - Whether any mdpp data is non-public (decides how much read-RBAC mdpp needs).
-- One organisation per user, or possibly several.
+- ~~One organisation per user, or possibly several.~~ **Resolved: several**, and the acting
+  organisation is chosen explicitly at request time.

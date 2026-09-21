@@ -12,7 +12,7 @@ manufacturer *declares* is checked against what a laboratory *molecularly analys
 declared-vs-evidenced gap is the contribution. (HvA Responsible AI Lab + Fashion Technology; HAN
 lab; partners Byborre, Candour, New Order of Fashion.)
 
-**Four components, independently deployable:**
+**Four components, independently deployable, plus one shared service:**
 - **dpp-app** — reference DPP: product identity + hierarchy + generic attrs. Agnostic of
   composition. A single **`Product`** entity (model/variant/batch/item collapsed; level derived
   from the GS1 path). NOT "the core".
@@ -20,24 +20,33 @@ lab; partners Byborre, Candour, New Order of Fashion.)
   **Flat & hierarchy-agnostic**, keyed by GS1 path; attaches to ANY DPP.
 - **passport-app** — the **concentrator/viewer**: merges DPP + mDPP, applies hierarchy *if present*,
   compares declared vs. tested across levels.
-- **mdpp-common** — shared library: the **organisation** entity, the **RBAC** engine + roles, and
-  the OIDC/JWT auth seam. Imports neither app; entity-agnostic.
+- **m-dpp-identity** — the shared **identity service**: organisations (incl. the platform
+  organisation and public keys), subjects, memberships, roles + role assignments, principal
+  resolution, identity audit. Backend only; its admin screens live in mdpp-common.
+- **mdpp-common** — shared library: the **RBAC** engine, the platform role/permission definition,
+  the **identity client** + auth seam, and the shared admin UI. Imports no app; entity-agnostic.
 
 **System-wide rules:**
 - Services share **standards** (GS1 identifiers, OIDC, JSON-LD/CIRPASS vocab) and the **library** —
-  **never runtime calls between services**. mdpp has no runtime dependency on dpp.
+  **no runtime calls between services, with ONE deliberate exception: both apps call
+  m-dpp-identity.** Identity is *infrastructure* (like the database or the IdP), not a peer app.
+  mdpp still has no runtime dependency on dpp, and neither app depends on the other.
 - **Hierarchy lives in dpp-app; mdpp is flat; the concentrator applies hierarchy if present.**
 - Products are referenced across services by **GS1 path**; internally each app keys by surrogate UUID.
+- **Organisations are referenced across services by the identity service's UUID** — one id per
+  organisation, system-wide. GLN stays optional (in attrs); RBAC keys on that id, never on GLN.
 - **JSON-LD** is added at the serialization boundary only.
 - Vocabulary priority: **schema.org → GS1 Web Vocab → CIRPASS-2 `dpp:` → `mdpp:`** (gaps only).
-- Organisations: identity = UUID; **GLN optional (in attrs)**; type from **assigned roles** (no
-  `operator_type`); RBAC keys on organisation **internal id**, never GLN.
+- Organisations: type from **assigned roles** (no `operator_type`).
 
 **Superseded system-wide — do NOT reintroduce:** four separate model/variant/batch/item
 entities/tables · a stored `granularity`/`level` column · GS1 path as a primary key · horizontal
 inheritance · a Ticket entity · a replicated tree / `inherited_from` **in mdpp** · inheritance logic
 inside mdpp · mdpp writing into dpp · a separate Laboratory entity · `operator`/`operator_type` ·
-GLN as a required column or an RBAC key · level in the RBAC key.
+GLN as a required column or an RBAC key · level in the RBAC key · **per-app `organisations` /
+`subjects` / `memberships` / `roles` / `organisation_roles` tables** · **`Organisation.external_key`
+and any cross-app organisation reconciliation** · **`platform_definition_checksum` and the
+"compare both Abouts to spot drift" safeguard** (there is one copy now, so there is no drift).
 
 <!-- =============== END SHARED SYSTEM CONTEXT =============== -->
 
@@ -45,29 +54,39 @@ GLN as a required column or an RBAC key · level in the RBAC key.
 
 # mdpp-common — repo context
 
-> This repo = the **shared library** used by dpp-app and mdpp-app. It owns the **organisation**
-> entity, the **RBAC** engine + roles, and the **OIDC/JWT auth** seam. It **imports neither app** and
-> must stay **entity-agnostic** (it operates on `(entity_type, attribute)` + stored role data, not on
-> any app's specific models). Changes here ripple to both apps — if a change would force a client-app
-> change, flag it before doing it.
+> This repo = the **shared library** used by dpp-app, mdpp-app and m-dpp-identity. It owns the
+> **RBAC** engine, the platform role/permission definition, the **m-dpp-identity client** + auth
+> seam, and the shared admin UI. It **imports no app** and must stay **entity-agnostic** (it
+> operates on `(entity_type, attribute)` + stored role data, not on any app's specific models).
+> Changes here ripple to every consumer — if a change would force a client change, flag it first.
 
-## Organisation entity
-- Identity = surrogate **UUID id**. **GLN optional, stored in `attrs`** (a lab may have none).
-- **Type comes from assigned roles, not an `operator_type`** (removed).
-- Each consuming app has its OWN organisation table (same shape, separate data); they correspond via
-  **OAuth identity** (`sub`), not a service link.
-- RBAC references organisations by **internal id**, never GLN.
-- **User<->organisation:** OAuth gives the user (`sub`); a membership table links `sub -> organisation`.
-  **A user represents an organisation; the organisation's role is the authority.** No per-user
-  roles for MVP. `get_principal`: token -> sub -> organisation (+ roles).
+## What LEFT this library (0.12.0)
 
-## Roles — DYNAMIC (data, not hardcoded)
-Roles are **stored records**, addable at runtime; not a fixed enum. Seed the known ones idempotently
-(`public, end_user_professional, recycler, supply_chain_professional, authority, economic_operator,
-laboratory`) as seed data. The dashboard renders role columns **dynamically** from stored roles.
-Admin endpoints: list/create/deactivate roles. Minimal, clearly-marked special-casing is acceptable
-only where genuinely required (e.g. economic-operator identification).
-Roles are **actor identities**; access lives in the permission engine, not in role names.
+Organisations, subjects, memberships, roles and role assignments moved to **m-dpp-identity**. They
+were mixins each app bound to its own tables, so the same company existed twice with two ids; see
+that repo's DESIGN §1. **Do not reintroduce them here**, and do not add a compatibility shim: an
+app that still binds them is an app that has not been migrated.
+
+Gone with them: `OrganisationMixin` · `SubjectMixin` / `MembershipMixin` · `make_organisation_router`
+· `make_subjects_router` · `resolve_principal` (the local-table one) · the `X-Dev-Role` stub ·
+`Organisation.external_key` · `platform_definition_checksum`.
+
+## The identity client (`m_dpp_common.identity`)
+- `IdentityClient` — typed async httpx client; `IDENTITY_API_BASE` + `IDENTITY_SERVICE_TOKEN`.
+- `make_get_principal(client=...)` — the same principal dict as before, resolved over HTTP.
+- **An outage is 503, never a fallback to `public`** — a fallback turns an outage into a silent
+  demotion and blames the user's role.
+- `PrincipalCache` — TTL (default 5s) on `(sub, acting_org)`; failures are never cached.
+- `wait_for_identity` — polls `/health` at startup and **gives up without stopping the boot**.
+
+## Roles — DYNAMIC (data, not hardcoded), and defined in identity
+Roles are **stored records**, addable at runtime; not a fixed enum. `rbac/platform.py` and
+`JRC_ROLES` stay here as the ONE definition identity seeds roles from and the apps seed their
+default permissions from. The `roles` table itself is identity's.
+An app therefore passes `include_roles=False, include_organisation_roles=False` to
+`make_rbac_router`, and sets `__role_foreign_key__ = False` on its permission models — there is no
+local `roles` table to reference. Roles are **actor identities**; access lives in the permission
+engine, not in role names.
 
 ## RBAC — two layers
 1. **Resource-level** gate: role x resource-type (e.g. `product`, `organisation`) x operation.
@@ -183,8 +202,34 @@ entity-agnostic.
   ONLY the checksum and the GMN charset — never the length, the digits, or the `/ ? #` that
   structure a path — so turning it back on can never change what an existing path means. The
   compose files set it false for demos; the error message names the flag.
+- 2026-09-21 (0.12.0): organisations, subjects, memberships and roles moved to **m-dpp-identity**.
+  This library keeps the CLIENT for reaching it, plus the RBAC engine — whose attribute and
+  resource matrices genuinely are per app. BREAKING: every consumer must rebuild `get_principal`
+  from `m_dpp_common.identity` and drop the moved model bindings.
+- 2026-09-21 (0.12.0): the `roles.name` foreign key on the permission mixins is OPTIONAL
+  (`__role_foreign_key__ = False`). An app has no local `roles` table now, so deleting a role in
+  identity no longer cascades to an app's permission rows — an orphaned row matches nothing and is
+  harmless, and a cross-service cascade was never available anyway.
+- 2026-09-21 (0.12.0): `make_rbac_router` gained `include_roles` / `include_organisation_roles`
+  (a service with no such table leaves them out) and two hooks —
+  `validate_organisation_role` and `on_organisation_role_change` — so identity can refuse an
+  operating role on the platform organisation and write its audit event INSIDE the same
+  transaction. The role endpoints moved onto sub-routers to make the switches possible.
+- 2026-09-21 (0.12.0): `PrincipalProvider` MERGES the permissions of two `/me` calls. Each service
+  answers for the resource types it governs: identity for organisations/subjects/rbac, the app for
+  its own entities. Asking only one would hide half the nav. `rbac` is reported by both and they
+  agree, because both seed it from `rbac/platform.py`.
+- 2026-09-21 (0.12.0): `Rbac` gained a SOURCE SWITCH (this app / Identity) because the matrices are
+  per service, while the Roles tab always talks to identity. `RbacApi` is the slice both clients
+  implement, which is what lets one screen serve both.
+- 2026-09-21 (0.12.0): `useOrganisationsWithRole` lost its `source` argument and filters
+  server-side. It existed because a picker whose value became a foreign key in service B had to
+  list service B's organisations; there is one organisation table now. It never offers the platform
+  organisation, which would only produce a 422 on submit.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions
 - Whether any mdpp data is non-public (decides how much read-RBAC mdpp needs).
 - ~~One organisation per user, or several.~~ **Resolved 2026-09-20: several.**
+- ~~How two services agree which organisation is which.~~ **Dissolved 2026-09-21:** there is one
+  organisation table, in m-dpp-identity, so there is nothing to agree about.

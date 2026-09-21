@@ -15,11 +15,12 @@
  *
  * Identity travels the same way as on the dpp client — the shared `identityStore`
  * feeds the same dev identity header — so switching "acting as" switches it for
- * both APIs at once.
+ * every API at once. The organisation it names is m-dpp-identity's id, which
+ * mdpp stores directly: there is one id per organisation now, so a front-end no
+ * longer has to translate between two services' ids to speak to both.
  */
 
 import { DEFAULT_IDENTITY_HEADER, queryString, requestJson } from "../api/client";
-import type { Organisation, OrganisationCreate, OrganisationRole } from "../api/types";
 import { identityStore } from "../api/identity";
 import type {
   ComparisonResponse,
@@ -98,19 +99,10 @@ export interface MdppApiClient {
    */
   me(): Promise<MdppPrincipal>;
 
-  /**
-   * Organisations **as mdpp knows them**, with their role assignments.
-   *
-   * Not the host app's. Anything that becomes an mdpp foreign key —
-   * `laboratory_id` on a test — must be an id mdpp issued. The two services keep
-   * separate organisation tables with separate UUIDs, so offering the host's
-   * list produces "no organisation '<uuid>'" at the moment of writing.
-   */
-  listOrganisations(): Promise<Organisation[]>;
-  listOrganisationRoles(): Promise<OrganisationRole[]>;
-  /** Create the counterpart of an organisation that exists in the host app but
-   *  not here — so a shared key is copied across rather than retyped. */
-  createOrganisation(body: OrganisationCreate): Promise<Organisation>;
+  // Organisations are NOT here. mdpp holds no organisation table any more: an
+  // id that becomes an mdpp foreign key (`laboratory_id` on a test) is issued
+  // by m-dpp-identity and means the same thing to every service, so a picker
+  // lists identity's organisations and this client has nothing to offer.
 }
 
 /** GS1 paths contain slashes that are part of the path, so each SEGMENT is
@@ -217,12 +209,6 @@ export function createMdppClient(opts: MdppClientOptions = {}): MdppApiClient {
 
     me: () => req("GET", "/me"),
 
-    async listOrganisations() {
-      const body = await req<{ "@graph"?: Organisation[] } | Organisation[]>("GET", "/organisations");
-      return Array.isArray(body) ? body : body["@graph"] ?? [];
-    },
-    listOrganisationRoles: () => req("GET", "/admin/rbac/organisation-roles"),
-    createOrganisation: (b) => req("POST", "/organisations", b),
 
     async ping() {
       try {

@@ -1,13 +1,18 @@
-/** Wire types for the endpoints the shared screens use. App-agnostic. */
+/** Wire types for the endpoints the shared screens use. App-agnostic.
+ *
+ * Organisations, subjects, memberships and roles are served by
+ * **m-dpp-identity** — one row per organisation, one id, system-wide. The
+ * `external_key` that used to sit on `Organisation` is gone with the problem it
+ * solved: each app no longer issues its own id for the same company, so there
+ * is nothing left to reconcile. */
 
 export interface Organisation {
   id: string;
   name: string;
-  /** The same organisation's name in the OTHER services. Each app issues its
-   *  own `id`, so this is the only value that means anything across them — it
-   *  is what `X-Acting-Org` carries. Null for an organisation that exists in
-   *  one service alone. */
-  external_key: string | null;
+  /** The platform organisation. Exactly one, it governs the installation and
+   *  owns nothing — it cannot be a product's operator or a test's laboratory,
+   *  and cannot be deleted. */
+  is_platform: boolean;
   attrs: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
@@ -16,7 +21,6 @@ export interface Organisation {
 }
 
 export interface OrganisationCreate {
-  external_key?: string | null;
   name: string;
   attrs?: Record<string, unknown> | null;
 }
@@ -58,7 +62,7 @@ export interface OrganisationRole {
 
 export interface SubjectMembership {
   id: string;
-  organisation: { id: string; name: string } | null;
+  organisation: { id: string; name: string; is_platform?: boolean } | null;
   is_org_admin: boolean;
   /** The organisation's roles — what this subject holds WHEN acting for it. */
   roles: string[];
@@ -71,9 +75,6 @@ export interface Subject {
   display_name: string | null;
   /** Every organisation this subject may act for. */
   memberships: SubjectMembership[];
-  /** @deprecated the FIRST membership, for callers written when there was at
-   *  most one. With several there is no single answer — use `memberships`. */
-  membership: SubjectMembership | null;
   /** Every role held in SOME organisation, for display only. Authority is
    *  always one organisation's at a time, never this union. */
   roles: string[];
@@ -101,15 +102,14 @@ export interface Principal {
   anonymous: boolean;
   reason: string | null;
   subject: { id: string; sub: string; email: string | null; display_name: string | null } | null;
-  /** The organisation currently being acted for. `key` is the cross-service
-   *  name — each app issues its own ids, so only the key means the same thing
-   *  to both. */
-  organisation: { id: string; key: string | null; name: string } | null;
+  /** The organisation currently being acted for. Its `id` is issued by
+   *  m-dpp-identity and means the same thing to every service. */
+  organisation: { id: string; name: string; is_platform: boolean } | null;
   /** …and whether this membership may administer it. */
   is_org_admin: boolean;
   /** Every organisation this subject may act for. Offered as choices; confers
    *  nothing by itself. */
-  organisations: { id: string; key: string | null; name: string; is_org_admin: boolean }[];
+  organisations: { id: string; name: string; is_org_admin: boolean; is_platform: boolean }[];
   roles: string[];
   /** @deprecated compat: roles[0] */
   role: string;
@@ -151,4 +151,60 @@ export interface SyncAttrsResult {
   discovered: number;
   registered: number;
   inserted: number;
+}
+
+
+// ── identity-only shapes ────────────────────────────────────────────────
+
+/** Where a laboratory publishes its results, and whether it is in service.
+ *  Stored in the organisation's `attrs`, but first-class on the wire because
+ *  m-dpp-app's `/refresh` depends on exactly these two keys. */
+export interface LabConfig {
+  organisation_id: string;
+  name: string;
+  lab_results_endpoint: string | null;
+  lab_active: boolean;
+}
+
+/** A public key an organisation signs with. Rotated, never replaced: a revoked
+ *  key is still listed, so a signature made before the revocation stays
+ *  verifiable. */
+export interface OrganisationKey {
+  id: string;
+  organisation_id: string;
+  kid: string;
+  public_key: string;
+  algorithm: string;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export interface OrganisationKeyCreate {
+  kid: string;
+  public_key: string;
+  algorithm?: string;
+}
+
+/** One entry in the identity audit trail. `detail` carries names AS THEY WERE,
+ *  because the rows it would otherwise join to may be gone. */
+export interface IdentityEvent {
+  id: string;
+  occurred_at: string;
+  event_type: string;
+  actor_sub: string | null;
+  organisation_id: string | null;
+  subject_id: string | null;
+  detail: Record<string, unknown>;
+}
+
+/** What the identity installation is running. */
+export interface IdentityAbout {
+  service: string;
+  resource_types: string[];
+  gln_pedantic: boolean;
+  /** False means the trusted-service endpoints are closed — the likeliest cause
+   *  of "everything resolves to public" in an app. */
+  service_token_configured: boolean;
+  platform_organisation: { id: string; name: string } | null;
+  roles: { name: string; label: string | null; description: string; active: boolean }[];
 }

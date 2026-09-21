@@ -1,57 +1,21 @@
 import { identityStore } from "./identity";
 import type {
   AttrPermission,
-  Membership,
-  Organisation,
-  OrganisationCreate,
-  OrganisationRole,
-  OrganisationUpdate,
   Principal,
   RbacAttribute,
   ResourcePermission,
-  Role,
-  RoleCreate,
-  RoleUpdate,
-  Subject,
-  SubjectCreate,
   SyncAttrsResult,
 } from "./types";
 
 /**
- * What the shared screens need from a backend. The consuming app supplies an
- * implementation — normally `createFetchClient({ baseUrl })` — through `ApiProvider`.
- * No URLs, no app-specific entities.
+ * The **attribute and resource matrices** — per entity type, and therefore per
+ * service. dpp's product attributes and mdpp's declaration attributes differ,
+ * so each app governs its own; m-dpp-identity governs `organisations`,
+ * `subjects` and `rbac` the same way, through the same endpoints.
+ *
+ * Both clients implement it, which is what lets one Rbac screen point at either.
  */
-export interface AdminApiClient {
-  // organisations
-  listOrganisations(opts?: { includeRemoved?: boolean }): Promise<Organisation[]>;
-  getOrganisation(id: string): Promise<Organisation>;
-  createOrganisation(body: OrganisationCreate): Promise<Organisation>;
-  updateOrganisation(id: string, body: OrganisationUpdate): Promise<Organisation>;
-  removeOrganisation(id: string): Promise<Organisation>;
-
-  // roles (dynamic data)
-  listRoles(): Promise<Role[]>;
-  createRole(body: RoleCreate): Promise<Role>;
-  updateRole(name: string, body: RoleUpdate): Promise<Role>;
-
-  // organisation ↔ role
-  listOrganisationRoles(): Promise<OrganisationRole[]>;
-  addOrganisationRole(organisationId: string, roleName: string): Promise<OrganisationRole>;
-  removeOrganisationRole(assignmentId: string): Promise<void>;
-
-  // subjects & memberships
-  listSubjects(): Promise<Subject[]>;
-  createSubject(body: SubjectCreate): Promise<Subject>;
-  deleteSubject(id: string): Promise<void>;
-  listMemberships(): Promise<Membership[]>;
-  createMembership(subjectId: string, organisationId: string, isOrgAdmin?: boolean): Promise<Membership>;
-  deleteMembership(id: string): Promise<void>;
-
-  // the current principal ("who am I acting as")
-  me(): Promise<Principal>;
-
-  // RBAC
+export interface RbacApi {
   listEntityTypes(): Promise<string[]>;
   listAttributes(entityType?: string): Promise<RbacAttribute[]>;
   createAttribute(body: { entity_type: string; attr_key: string; description?: string }): Promise<RbacAttribute>;
@@ -61,6 +25,24 @@ export interface AdminApiClient {
   updateAttrPermission(id: string, body: { can_read?: boolean; can_write?: boolean }): Promise<AttrPermission>;
   listResourcePermissions(resourceType?: string): Promise<ResourcePermission[]>;
   updateResourcePermission(id: string, body: Partial<Omit<ResourcePermission, "id" | "resource_type" | "role_name">>): Promise<ResourcePermission>;
+}
+
+/**
+ * What the shared screens need from an **app's own** backend. The consuming app
+ * supplies an implementation — normally `createFetchClient({ baseUrl })` —
+ * through `ApiProvider`. No URLs, no app-specific entities.
+ *
+ * Organisations, subjects, memberships and roles are **not** here: they are
+ * served by m-dpp-identity, through `IdentityApiClient`. An app backend no
+ * longer holds those tables at all.
+ *
+ * `me()` stays, and is not a duplicate of identity's: the principal is resolved
+ * by identity, but the `permissions` an app reports are its OWN resource types
+ * (`products`, `declarations`…). Each service answers for what it governs, and
+ * `PrincipalProvider` merges the two.
+ */
+export interface AdminApiClient extends RbacApi {
+  me(): Promise<Principal>;
 }
 
 /** Build a query string from defined, non-empty values (exported for app-specific clients). */
@@ -153,10 +135,7 @@ export const DEFAULT_IDENTITY_HEADER = "X-Dev-Sub";
 export const DEFAULT_ACTING_ORG_HEADER = "X-Acting-Org";
 
 export const DEFAULT_PATHS = {
-  organisations: "/organisations",
   rbac: "/admin/rbac",
-  subjects: "/subjects",
-  memberships: "/memberships",
   me: "/me",
 };
 
@@ -176,28 +155,6 @@ export function createFetchClient(opts: FetchClientOptions = {}): AdminApiClient
 
   const rbac = paths.rbac;
   return {
-    listOrganisations: (o) => req("GET", paths.organisations, undefined, { include_removed: o?.includeRemoved }),
-    getOrganisation: (id) => req("GET", `${paths.organisations}/${id}`),
-    createOrganisation: (b) => req("POST", paths.organisations, b),
-    updateOrganisation: (id, b) => req("PATCH", `${paths.organisations}/${id}`, b),
-    removeOrganisation: (id) => req("DELETE", `${paths.organisations}/${id}`),
-
-    listRoles: () => req("GET", `${rbac}/roles`),
-    createRole: (b) => req("POST", `${rbac}/roles`, b),
-    updateRole: (name, b) => req("PATCH", `${rbac}/roles/${name}`, b),
-
-    listOrganisationRoles: () => req("GET", `${rbac}/organisation-roles`),
-    addOrganisationRole: (organisation_id, role_name) => req("POST", `${rbac}/organisation-roles`, { organisation_id, role_name }),
-    removeOrganisationRole: (id) => req("DELETE", `${rbac}/organisation-roles/${id}`),
-
-    listSubjects: () => req("GET", paths.subjects),
-    createSubject: (b) => req("POST", paths.subjects, b),
-    deleteSubject: (id) => req("DELETE", `${paths.subjects}/${id}`),
-    listMemberships: () => req("GET", paths.memberships),
-    createMembership: (subject_id, organisation_id, is_org_admin = false) =>
-      req("POST", paths.memberships, { subject_id, organisation_id, is_org_admin }),
-    deleteMembership: (id) => req("DELETE", `${paths.memberships}/${id}`),
-
     me: () => req("GET", paths.me),
 
     listEntityTypes: () => req("GET", `${rbac}/entity-types`),
