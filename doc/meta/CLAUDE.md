@@ -241,9 +241,13 @@ entity-agnostic.
 - 2026-09-21: `src/hierarchy/` is HANDED a chain and never goes looking for one. Deriving ancestry
   belongs to whoever owns the tree (dpp-app's `parent_id`, a partner's own model, passport-app's
   merge). A GS1 path cannot supply it: a batch and its model share no prefix, and a GMN is not
-  derivable from a GTIN. The ORCHESTRATION — how many round trips to make — deliberately stayed in
-  dpp-app: passport-app does not exist yet, and guessing its fetching shape is designing for an
-  imaginary consumer.
+  derivable from a GTIN.
+- 2026-09-21: `comparisonsAlongChain` was hoisted too, REVERSING the same-day decision to leave the
+  fetching in dpp-app. "Don't design for an imaginary consumer" was applied too mechanically: the
+  second pass is not optional, omitting it fails SILENTLY (every call succeeds, every verdict wrong
+  in one direction), and that failure is exactly the bug this round fixed. Thirteen lines are not
+  speculative generality when re-implementing them reproduces a known defect. A host with different
+  fetching needs uses `effectiveClaims` directly — the rule must not differ, the round trips may.
 - (Append new mdpp-common decisions here.)
 
 ## Open questions

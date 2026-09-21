@@ -340,8 +340,15 @@ the client for a flat service knows nothing about hierarchy — that still holds
 so that two hierarchy-aware viewers cannot disagree about which claim was tested, which would mean
 different verdicts from the same evidence.
 
-The *fetching* is not shared: how many round trips to make is a host's business, and dpp-app's
-two-pass approach is in its Molecular tab until passport-app exists to say what it needs.
+`comparisonsAlongChain(source, paths)` performs the calls that rule implies, and is shared for the
+same reason: **the second pass is not optional.** Which ancestor applies is only knowable once the
+first pass has said who declares, and omitting the re-ask fails *silently* — every call succeeds and
+every verdict is wrong in the same direction, reporting `undeclared` for fibres a claim one level up
+covers. It re-asks only the levels that have evidence and no claim of their own, usually one.
+
+A host needing different fetching — batching across several passports, its own cache — uses
+`effectiveClaims` directly rather than bending this. The rule is the part that must not differ; the
+round trips are not. `source` is structural, so a cache or a test double can stand in for the client.
 
 ### The Comparison renderer (`src/components/Comparison`)
 
