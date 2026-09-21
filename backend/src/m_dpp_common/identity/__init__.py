@@ -17,6 +17,7 @@ from m_dpp_common.identity.client import (
     IdentityClient,
     IdentityUnavailable,
 )
+from m_dpp_common.identity.me import effective_permissions, make_me_router
 from m_dpp_common.identity.principal import (
     DEFAULT_CACHE_TTL,
     PRINCIPAL_CACHE_TTL_ENV,
@@ -27,6 +28,8 @@ from m_dpp_common.identity.principal import (
 
 __all__ = [
     "IdentityClient",
+    "make_me_router",
+    "effective_permissions",
     "IdentityUnavailable",
     "SERVICE_TOKEN_HEADER",
     "IDENTITY_API_BASE_ENV",

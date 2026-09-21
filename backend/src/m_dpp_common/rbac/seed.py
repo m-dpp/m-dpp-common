@@ -7,6 +7,14 @@ API and get the same fan-out as seeded ones.
 Fan-out keeps the permission grid complete: every (role × resource_type) has a
 resource row and every (role × registered attribute) has an attribute row, so a
 new role never lands in the "no row = allow" gap of the dev posture.
+
+**A service without a `roles` table** — which, since m-dpp-identity, is both apps
+— passes ``role_model=None`` and gets the role NAMES from this module's seed list
+instead. Its matrices still cover every role; it simply does not own the role
+records. A role added at runtime in identity will not appear in an app's matrix
+until that app is reseeded, and until then the dev posture's "no row = allow"
+applies to it. That is a real gap, and the honest place to close it is a sync,
+not a second copy of the table.
 """
 
 from sqlalchemy import select
@@ -122,14 +130,24 @@ async def fan_out_attribute(
     entity_type: str,
     attr_key: str,
     *,
-    role_model,
+    role_model=None,
+    role_names: list[str] | None = None,
     attr_permission_model,
     attr_defaults: dict | None = None,
 ) -> int:
-    """Add the missing (attribute × role) rows for one registered attribute. Does not commit."""
+    """Add the missing (attribute × role) rows for one registered attribute. Does not commit.
+
+    Give ``role_model`` (a service that owns the roles table) or ``role_names``
+    (one that does not); without either, the seed list is used.
+    """
     Attr = attr_permission_model
     a_defaults = attr_defaults or NEW_ROLE_ATTR_DEFAULTS
-    role_names = [n for (n,) in (await db.execute(select(role_model.name))).all()]
+    if role_names is None:
+        role_names = (
+            [n for (n,) in (await db.execute(select(role_model.name))).all()]
+            if role_model is not None
+            else [_unpack_role(entry)[0] for entry in JRC_ROLES]
+        )
     have = {
         rn
         for (rn,) in (
@@ -153,7 +171,7 @@ async def fan_out_attribute(
 async def seed_rbac(
     db: AsyncSession,
     *,
-    role_model,
+    role_model=None,
     resource_permission_model,
     resource_types: list[str],
     resource_defaults: dict[str, dict],
@@ -166,19 +184,26 @@ async def seed_rbac(
 
     ``resource_defaults`` maps role name → permissions, where the permissions are a
     flat dict (same for every resource type) or a dict keyed by resource type with
-    an optional ``"*"`` fallback — see :func:`_defaults_for`."""
-    for position, entry in enumerate(roles):
-        name, label, description = _unpack_role(entry)
-        existing = await db.execute(select(role_model).where(role_model.name == name))
-        if existing.scalar_one_or_none() is None:
-            db.add(
-                role_model(
-                    name=name, label=label, description=description, sort_order=position
-                )
-            )
-    await db.flush()
+    an optional ``"*"`` fallback — see :func:`_defaults_for`.
 
-    all_roles = [n for (n,) in (await db.execute(select(role_model.name))).all()]
+    ``role_model=None`` means this service does not own the roles table (both apps,
+    since m-dpp-identity): no role records are written, and the matrices are fanned
+    out over the names in ``roles``."""
+    if role_model is not None:
+        for position, entry in enumerate(roles):
+            name, label, description = _unpack_role(entry)
+            existing = await db.execute(select(role_model).where(role_model.name == name))
+            if existing.scalar_one_or_none() is None:
+                db.add(
+                    role_model(
+                        name=name, label=label, description=description, sort_order=position
+                    )
+                )
+        await db.flush()
+        all_roles = [n for (n,) in (await db.execute(select(role_model.name))).all()]
+    else:
+        all_roles = [_unpack_role(entry)[0] for entry in roles]
+
     for role_name in all_roles:
         await fan_out_role(
             db,

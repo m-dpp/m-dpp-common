@@ -1,6 +1,7 @@
 from m_dpp_common.rbac.admin import make_rbac_router
 from m_dpp_common.rbac.engine import BoundRbac, RbacEngine, as_roles, principal_roles
 from m_dpp_common.rbac.platform import (
+    APP_RESOURCE_TYPES,
     COMMON_RESOURCE_DEFAULTS,
     COMMON_RESOURCE_TYPES,
     FULL,
@@ -11,6 +12,7 @@ from m_dpp_common.rbac.platform import (
     merge_resource_defaults,
     permissions_checksum,
     platform_definition_checksum,
+    resource_defaults_for,
 )
 from m_dpp_common.rbac.models import (
     ATTR_ORIGIN_DISCOVERED,
@@ -37,6 +39,8 @@ __all__ = [
     "principal_roles",
     "COMMON_RESOURCE_TYPES",
     "COMMON_RESOURCE_DEFAULTS",
+    "APP_RESOURCE_TYPES",
+    "resource_defaults_for",
     "merge_resource_defaults",
     "permissions_checksum",
     "platform_definition_checksum",

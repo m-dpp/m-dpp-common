@@ -28,8 +28,17 @@ READ_UPDATE = dict(can_list=True, can_read=True, can_create=False, can_update=Tr
 WRITE = dict(can_list=True, can_read=True, can_create=True, can_update=True, can_delete=False)
 FULL = dict(can_list=True, can_read=True, can_create=True, can_update=True, can_delete=True)
 
-#: Resource types every app has, whatever else it adds.
+#: Resource types **m-dpp-identity** gates. They are what was always common to
+#: every app — identities, organisations, and the access-control surface itself —
+#: and they now exist in one service instead of three copies.
 COMMON_RESOURCE_TYPES: list[str] = ["organisations", "rbac", "subjects"]
+
+#: What an APP still gates from this shared definition. Only `rbac`: an app keeps
+#: its own attribute and resource matrices (its entity types differ from every
+#: other service's), but who may *change* those matrices is a platform decision
+#: and must read the same everywhere. `organisations` and `subjects` are not an
+#: app's to gate any more — it holds neither table.
+APP_RESOURCE_TYPES: list[str] = ["rbac"]
 
 #: What each role may do with the resources every app shares.
 #:
@@ -134,3 +143,22 @@ def platform_definition_checksum(
     }
     blob = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(blob).hexdigest()[:12]
+
+
+def resource_defaults_for(
+    resource_types: list[str], defaults: dict[str, dict] | None = None
+) -> dict[str, dict]:
+    """The slice of a defaults table covering just these resource types.
+
+    An app takes ``resource_defaults_for(APP_RESOURCE_TYPES)`` and layers its own
+    entities on top, rather than retyping who may touch ``rbac``. Restating it
+    per app is exactly the copying this round exists to stop — and the one that
+    would matter most if it drifted, since it decides who may widen everyone
+    else's access.
+    """
+    table = COMMON_RESOURCE_DEFAULTS if defaults is None else defaults
+    wanted = set(resource_types)
+    return {
+        role: {rt: perms for rt, perms in per_resource.items() if rt in wanted}
+        for role, per_resource in table.items()
+    }
