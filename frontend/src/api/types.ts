@@ -13,6 +13,10 @@ export interface Organisation {
    *  owns nothing — it cannot be a product's operator or a test's laboratory,
    *  and cannot be deleted. */
   is_platform: boolean;
+  /** Active role names. An organisation's NATURE is its roles — there is no type
+   *  column, a lab is simply an organisation holding `laboratory` — so they
+   *  travel with it rather than needing a second request per row. */
+  roles: string[];
   attrs: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
