@@ -193,7 +193,7 @@ function LeafInput({ node, disabled, onValue }: { node: AttrNode; disabled?: boo
       const url = typeof node.value === "string" ? node.value : "";
       return (
         <div className={s.imgEdit}>
-          <Input size_="sm" type="url" mono disabled={disabled} value={url} placeholder="https://…/photo.jpg" onChange={(e) => onValue(e.target.value)} title="Stored as a plain URL string; recognised as an image by its extension (.png .jpg .webp …) or a data:image URI" />
+          <Input size_="sm" type="url" mono disabled={disabled} value={url} placeholder="https://…/photo.jpg" onChange={(e) => onValue(e.target.value)} title="Stored as a plain URL string; recognised as an image by its extension (.png .jpg .webp …), by an fm=/format= query parameter, or as a data:image URI" />
           {url.trim() && <ImageThumb url={url} />}
         </div>
       );

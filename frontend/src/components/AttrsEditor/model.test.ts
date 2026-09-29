@@ -40,6 +40,10 @@ describe("inferType", () => {
     expect(inferType("https://cdn.example/p/jacket.PNG?w=400#x")).toBe("image");
     expect(inferType("http://cdn.example/a.webp")).toBe("image");
     expect(inferType("data:image/png;base64,iVBORw0KGgo=")).toBe("image");
+    // image CDNs name the format in the query instead of the path
+    expect(inferType("https://images.unsplash.com/photo-1579206464424-7e43a81cadc1?w=640&fm=jpg&crop=entropy")).toBe("image");
+    expect(inferType("https://cdn.example/img/abc?format=WEBP")).toBe("image");
+    expect(inferType("https://cdn.example/img/abc?fm=pdf")).toBe("text");
     expect(inferType("https://example.com/product/123")).toBe("text");
     expect(inferType("https://example.com/report.pdf")).toBe("text");
     expect(inferType("javascript:alert(1).png")).toBe("text");

@@ -3,7 +3,8 @@
  *
  * - leaf:    text | number | boolean | date | image
  *            (date = ISO calendar date "YYYY-MM-DD"; image = a URL string pointing at an
- *             image — stored as a plain string, recognised by extension or data:image/ URI)
+ *             image — stored as a plain string, recognised by extension, by an image
+ *             format in its `fm=`/`format=` query parameter, or as a data:image/ URI)
  * - complex: object (named children) | list (ordered, unnamed children)
  *
  * Free-form: any key, any depth, no schema. All operations are immutable and
@@ -51,15 +52,22 @@ export function isDateString(v: unknown): v is string {
 
 const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|avif|svg|bmp)(\?[^#]*)?(#.*)?$/i;
 const IMAGE_DATA_RE = /^data:image\/[a-z0-9.+-]+[;,]/i;
+// Image CDNs (imgix, Unsplash, Cloudinary-style) often serve `/photo-<id>?fm=jpg` with
+// no extension in the path — the format lives in a query parameter instead.
+const IMAGE_FORMAT_PARAMS = ["fm", "format"];
+const IMAGE_FORMAT_RE = /^(png|jpe?g|gif|webp|avif|svg|bmp)$/i;
 
-/** A string that points at an image: http(s) URL with an image extension, or a data:image URI. */
+/** A string that points at an image: http(s) URL with an image extension (or an image
+ *  format named in its `fm=`/`format=` query parameter), or a data:image URI. */
 export function isImageUrl(v: unknown): v is string {
   if (typeof v !== "string" || v.length > 4096) return false;
   const s = v.trim();
   if (IMAGE_DATA_RE.test(s)) return true;
   if (!/^https?:\/\//i.test(s)) return false;
   try {
-    return IMAGE_EXT_RE.test(new URL(s).pathname + (new URL(s).search || ""));
+    const url = new URL(s);
+    if (IMAGE_EXT_RE.test(url.pathname + (url.search || ""))) return true;
+    return IMAGE_FORMAT_PARAMS.some((p) => IMAGE_FORMAT_RE.test(url.searchParams.get(p) ?? ""));
   } catch {
     return false;
   }
