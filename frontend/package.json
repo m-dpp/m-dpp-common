@@ -5,7 +5,8 @@
   "private": true,
   "type": "module",
   "sideEffects": [
-    "**/*.css"
+    "**/*.css",
+    "./src/design/index.ts"
   ],
   "exports": {
     ".": {
