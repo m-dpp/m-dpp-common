@@ -69,7 +69,8 @@
 .unitInput { font-family: var(--mdpp-mono); }
 
 /* ---------- import JSON ---------- */
-.importBtn { margin-left: auto; }
+.spacer { margin-left: auto; }
+.viewTools { display: flex; justify-content: flex-end; padding-top: 6px; }
 .importBox { display: flex; flex-direction: column; gap: 10px; }
 .importText { min-height: 220px; font-family: var(--mdpp-mono); font-size: var(--mdpp-fs-xs); resize: vertical; width: 100%; box-sizing: border-box; }
 .importHead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

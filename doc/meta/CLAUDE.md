@@ -265,6 +265,11 @@ entity-agnostic.
   declares nothing" — so a failed lookup on the model silently produced the undeclared-everywhere
   verdicts the two-pass rule exists to prevent, with nothing on screen to say so. "Nothing here" and
   "not yours to read" remain answers; a failure is not an answer.
+- 2026-10-05 (0.13.1): **copy JSON** on the AttrsEditor in both modes (`allowCopy`): the visible
+  attributes, pretty-printed, to the clipboard, with a hidden-textarea fallback because a plain-http
+  pilot is not a secure context and the async clipboard is absent there. The export half of Import
+  JSON: a bag travels between products, or into a batch edit, through the clipboard. Hidden keys are
+  not copied — what you cannot see you do not export.
 
 ## Open questions
 - Whether any mdpp data is non-public (decides how much read-RBAC mdpp needs).

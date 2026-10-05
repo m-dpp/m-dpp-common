@@ -64,6 +64,8 @@ export interface AttrsEditorProps {
   collapsedByDefault?: boolean;
   /** Edit mode: offer "Import JSON" (paste an object; keys merge into the top level). Default true. */
   allowImport?: boolean;
+  /** Offer "copy JSON" (the visible attributes, pretty-printed, to the clipboard). Default true. */
+  allowCopy?: boolean;
 }
 
 const TYPE_LABEL: Record<NodeType, string> = {
@@ -80,6 +82,55 @@ const TYPE_LABEL: Record<NodeType, string> = {
 
 function shorten(s: string, max = 80): string {
   return s.length > max ? `${s.slice(0, max - 3)}…` : s;
+}
+
+// ==================================================================== copy
+
+/** Copies the attributes as pretty-printed JSON — the export half of Import JSON, so a
+ *  bag can be carried from one product to another, or into a batch edit, through the
+ *  clipboard. Falls back to a hidden textarea where the async clipboard is unavailable
+ *  (plain-http pilot deployments are not a secure context). */
+function CopyJsonButton({ getJson, className }: { getJson: () => JsonObject; className?: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
+
+  async function copy() {
+    const text = JSON.stringify(getJson(), null, 2);
+    let ok = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        ok = true;
+      }
+    } catch {
+      ok = false;
+    }
+    if (!ok) {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        ok = document.execCommand("copy");
+      } catch {
+        ok = false;
+      }
+      document.body.removeChild(ta);
+    }
+    setState(ok ? "copied" : "failed");
+    if (timer.current) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setState("idle"), 1600);
+  }
+
+  return (
+    <button type="button" className={[s.adderBtn, className ?? ""].join(" ")} onClick={copy} title="Copy these attributes as JSON to the clipboard">
+      {state === "copied" ? "✓ copied" : state === "failed" ? "could not copy" : "⧉ copy JSON"}
+    </button>
+  );
 }
 
 // ==================================================================== image
@@ -190,7 +241,7 @@ interface EditCtx {
   onAdd: (parentId: string | null, kind: NodeType) => void;
 }
 
-function Adders({ parentId, ctx, root, onImport }: { parentId: string | null; ctx: EditCtx; root?: boolean; onImport?: () => void }) {
+function Adders({ parentId, ctx, root, onImport, getJson }: { parentId: string | null; ctx: EditCtx; root?: boolean; onImport?: () => void; getJson?: () => JsonObject }) {
   return (
     <div className={[s.adders, root ? s.rootAdders : ""].join(" ")}>
       <button type="button" className={s.adderBtn} onClick={() => ctx.onAdd(parentId, "text")}>
@@ -202,8 +253,10 @@ function Adders({ parentId, ctx, root, onImport }: { parentId: string | null; ct
       <button type="button" className={s.adderBtn} onClick={() => ctx.onAdd(parentId, "list")}>
         ＋ list
       </button>
+      {(onImport || getJson) && <span className={s.spacer} />}
+      {getJson && <CopyJsonButton getJson={getJson} />}
       {onImport && (
-        <button type="button" className={[s.adderBtn, s.importBtn].join(" ")} onClick={onImport} title="Paste a JSON object; its keys are merged into the attributes">
+        <button type="button" className={s.adderBtn} onClick={onImport} title="Paste a JSON object; its keys are merged into the attributes">
           ⤓ import JSON
         </button>
       )}
@@ -462,6 +515,7 @@ export function AttrsEditor({
   compact,
   collapsedByDefault,
   allowImport = true,
+  allowCopy = true,
 }: AttrsEditorProps) {
   const hidden = useMemo(() => new Set(hiddenKeys ?? []), [hiddenKeys]);
   const readOnly = useMemo(() => new Set(readOnlyKeys ?? []), [readOnlyKeys]);
@@ -543,7 +597,14 @@ export function AttrsEditor({
         {viewNodes.length === 0 ? (
           <div className={s.empty}>{emptyText}</div>
         ) : (
-          viewNodes.map((n) => <ViewRow key={n.id} node={n} inList={false} provenance={provenance?.[n.key]} />)
+          <>
+            {viewNodes.map((n) => <ViewRow key={n.id} node={n} inList={false} provenance={provenance?.[n.key]} />)}
+            {allowCopy && (
+              <div className={s.viewTools}>
+                <CopyJsonButton getJson={() => visibleValue as JsonObject} />
+              </div>
+            )}
+          </>
         )}
       </div>
     );
@@ -556,7 +617,7 @@ export function AttrsEditor({
       {nodes.map((n) => (
         <EditRow key={n.id} node={n} inList={false} dup={dups.has(n.key.trim())} readOnly={readOnly.has(n.key)} ctx={ctx} provenance={provenance?.[n.key]} />
       ))}
-      <Adders parentId={null} ctx={ctx} root onImport={allowImport ? () => setImporting(true) : undefined} />
+      <Adders parentId={null} ctx={ctx} root onImport={allowImport ? () => setImporting(true) : undefined} getJson={allowCopy && nodes.length > 0 ? () => toJson(nodes) : undefined} />
       {allowImport && <ImportModal open={importing} onClose={() => setImporting(false)} onApply={applyImport} currentKeys={nodes.map((n) => n.key.trim())} />}
       <Modal
         open={pendingType !== null}
