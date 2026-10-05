@@ -43,6 +43,15 @@ export interface TestsProps {
    *  rows on `pathScope` itself: an unscoped listing spans identifiers that
    *  share no ancestor. */
   declarationPath?: string | null;
+  /**
+   * Called after a test CHANGED STATE here — registered, refreshed to a result,
+   * withdrawn. A host that derives anything from the evidence (dpp-app's Molecular
+   * tab resolves which claim each level inherits from how many VERIFIED tests it
+   * holds) must recompute, or its expanded rows keep asking against yesterday's
+   * basis: a batch whose first result just arrived would read "not declared" until
+   * the browser was reloaded, while the model's claim sat one level up.
+   */
+  onChanged?: () => void | Promise<void>;
 }
 
 /**
@@ -53,7 +62,7 @@ export interface TestsProps {
  * row expands **in place** into the shared Comparison renderer; a pending or
  * errored row offers Refresh instead.
  */
-export function Tests({ pathScope = null, resourceType = "tests", bare = false, comparisonNote, declarationPath = null }: TestsProps) {
+export function Tests({ pathScope = null, resourceType = "tests", bare = false, comparisonNote, declarationPath = null, onChanged }: TestsProps) {
   const mdpp = useMdpp();
   const { can, principal } = usePrincipal();
 
@@ -114,6 +123,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
     try {
       await mdpp.refreshTest(t.gs1_path, t.id);
       await list.reload();
+      await onChanged?.();
     } catch (e) {
       setActionError(errorMessage(e));
     } finally {
@@ -348,7 +358,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
         <WithdrawTestModal
           test={withdrawing}
           onClose={() => setWithdrawing(null)}
-          onDone={async () => { setWithdrawing(null); await list.reload(); }}
+          onDone={async () => { setWithdrawing(null); await list.reload(); await onChanged?.(); }}
         />
       )}
 
@@ -357,7 +367,7 @@ export function Tests({ pathScope = null, resourceType = "tests", bare = false, 
           gs1Path={pathScope ?? ""}
           labs={labs}
           onClose={() => setRegistering(false)}
-          onSaved={() => { setRegistering(false); void list.reload(); }}
+          onSaved={() => { setRegistering(false); void list.reload().then(() => onChanged?.()); }}
         />
       )}
     </>

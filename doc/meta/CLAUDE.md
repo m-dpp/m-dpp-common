@@ -271,6 +271,12 @@ entity-agnostic.
   JSON: a bag travels between products, or into a batch edit, through the clipboard. Hidden keys are
   not copied — what you cannot see you do not export. (0.13.2) `CopyJsonButton` is exported, so a
   host that shows one bag in pieces can switch the per-view buttons off and offer one for the whole.
+- 2026-10-05 (0.13.3): `Tests` gained `onChanged`, fired after a test is registered, refreshed to a
+  result or withdrawn. The "declare on the model, test on the batch did not link" demo fault was
+  THIS, not the rule: the host computed the chain's effective claims once, when the batch held no
+  verified evidence, and Refresh reloaded only the list — so the expanded row kept asking without
+  `declaration_path` until a browser reload. Declaring on the variant "fixed" it only because
+  declaring triggers the host's recomputation. Evidence changes the basis; the host must be told.
 
 ## Open questions
 - Whether any mdpp data is non-public (decides how much read-RBAC mdpp needs).
