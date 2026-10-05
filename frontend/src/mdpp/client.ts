@@ -20,7 +20,7 @@
  * longer has to translate between two services' ids to speak to both.
  */
 
-import { DEFAULT_IDENTITY_HEADER, queryString, requestJson } from "../api/client";
+import { ApiError, DEFAULT_IDENTITY_HEADER, queryString, requestJson } from "../api/client";
 import { identityStore } from "../api/identity";
 import type {
   ComparisonResponse,
@@ -197,14 +197,23 @@ export function createMdppClient(opts: MdppClientOptions = {}): MdppApiClient {
 
     async comparisons(paths, opts = {}) {
       // One request per identifier — mdpp is flat and answers about exactly one.
-      // A path with nothing on it (or a caller with no access) resolves to null
-      // rather than rejecting the whole batch; a host showing a chain wants the
-      // levels that DO have data, not an error because one level has none.
+      // A path with nothing on it, or one the caller may not read, resolves to
+      // null rather than rejecting the whole batch: a host showing a chain wants
+      // the levels that DO have data, not an error because one level has none.
+      //
+      // Anything else is a FAILURE and must surface. A level whose lookup failed
+      // is not a level that declares nothing — but that is exactly how a null
+      // would be read by whoever applies the inheritance rule on this result,
+      // and every verdict beneath it would then be wrong in the same direction
+      // with nothing on screen to say so.
       const settled = await Promise.all(
         paths.map((p) =>
           this.comparison(p, { declarationPath: opts.declarationPaths?.[p] }).then(
             (r) => [p, r] as const,
-            () => [p, null] as const,
+            (e: unknown) => {
+              if (e instanceof ApiError && (e.status === 403 || e.status === 404)) return [p, null] as const;
+              throw e;
+            },
           ),
         ),
       );
