@@ -91,8 +91,9 @@ export function UsersAndLinks({ resourceType = "subjects" }: UsersAndLinksProps)
                       {principal?.sub === x.sub && <Chip tone="accent">acting</Chip>}
                     </span>
                     <span className={s.subId}>
-                      {x.sub}
-                      {x.email ? ` · ${x.email}` : ""}
+                      {/* the development convention uses the email as the sub, so say which is which */}
+                      <span className="mdpp-muted">id </span>{x.sub}
+                      {x.email ? <><span className="mdpp-muted"> · email </span>{x.email}</> : ""}
                     </span>
                   </div>
                 ),
