@@ -89,8 +89,11 @@ function shorten(s: string, max = 80): string {
 /** Copies the attributes as pretty-printed JSON — the export half of Import JSON, so a
  *  bag can be carried from one product to another, or into a batch edit, through the
  *  clipboard. Falls back to a hidden textarea where the async clipboard is unavailable
- *  (plain-http pilot deployments are not a secure context). */
-function CopyJsonButton({ getJson, className }: { getJson: () => JsonObject; className?: string }) {
+ *  (plain-http pilot deployments are not a secure context).
+ *
+ *  Exported so a host that shows one bag in several pieces (own and inherited, say) can
+ *  turn the per-view buttons off (`allowCopy={false}`) and offer ONE that copies the whole. */
+export function CopyJsonButton({ getJson, className, label = "⧉ copy JSON", title = "Copy these attributes as JSON to the clipboard" }: { getJson: () => JsonObject; className?: string; label?: string; title?: string }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   const timer = useRef<number | null>(null);
   useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
@@ -127,8 +130,8 @@ function CopyJsonButton({ getJson, className }: { getJson: () => JsonObject; cla
   }
 
   return (
-    <button type="button" className={[s.adderBtn, className ?? ""].join(" ")} onClick={copy} title="Copy these attributes as JSON to the clipboard">
-      {state === "copied" ? "✓ copied" : state === "failed" ? "could not copy" : "⧉ copy JSON"}
+    <button type="button" className={[s.adderBtn, className ?? ""].join(" ")} onClick={copy} title={title}>
+      {state === "copied" ? "✓ copied" : state === "failed" ? "could not copy" : label}
     </button>
   );
 }

@@ -269,7 +269,8 @@ entity-agnostic.
   attributes, pretty-printed, to the clipboard, with a hidden-textarea fallback because a plain-http
   pilot is not a secure context and the async clipboard is absent there. The export half of Import
   JSON: a bag travels between products, or into a batch edit, through the clipboard. Hidden keys are
-  not copied — what you cannot see you do not export.
+  not copied — what you cannot see you do not export. (0.13.2) `CopyJsonButton` is exported, so a
+  host that shows one bag in pieces can switch the per-view buttons off and offer one for the whole.
 
 ## Open questions
 - Whether any mdpp data is non-public (decides how much read-RBAC mdpp needs).
