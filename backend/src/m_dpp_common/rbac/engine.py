@@ -58,10 +58,16 @@ def _role_pred(column, roles: list[str]):
 
 
 class RbacEngine:
-    def __init__(self, *, attr_permission_model, resource_permission_model, role_model=None):
+    def __init__(
+        self, *, attr_permission_model, resource_permission_model, role_model=None, attribute_model=None
+    ):
         self._Attr = attr_permission_model
         self._Res = resource_permission_model
         self._Role = role_model  # optional: when given, roles are validated against it
+        # optional: when given, the permission rows of a RETIRED attribute are ignored,
+        # so the key behaves as it did before anyone registered it. Without it (an
+        # older binding) retired rows keep enforcing — safe, merely less tidy.
+        self._Reg = attribute_model
 
     # ------------------------------------------------------------------ roles
 
@@ -150,14 +156,19 @@ class RbacEngine:
         self, attrs: dict, role_name: str, db: AsyncSession, *, entity_type: str, column: str
     ) -> set[str]:
         Attr = self._Attr
-        result = await db.execute(
-            select(Attr.attr_key).where(
-                Attr.entity_type == entity_type,
-                Attr.role_name == role_name,
-                Attr.attr_key.in_(list(attrs.keys())),
-                getattr(Attr, column) == False,  # noqa: E712
-            )
+        q = select(Attr.attr_key).where(
+            Attr.entity_type == entity_type,
+            Attr.role_name == role_name,
+            Attr.attr_key.in_(list(attrs.keys())),
+            getattr(Attr, column) == False,  # noqa: E712
         )
+        if self._Reg is not None:
+            Reg = self._Reg
+            retired = select(Reg.attr_key).where(
+                Reg.entity_type == entity_type, Reg.removed_at.is_not(None)
+            )
+            q = q.where(Attr.attr_key.not_in(retired))
+        result = await db.execute(q)
         return set(result.scalars().all())
 
     async def _denied_keys(

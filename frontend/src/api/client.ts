@@ -17,9 +17,11 @@ import type {
  */
 export interface RbacApi {
   listEntityTypes(): Promise<string[]>;
-  listAttributes(entityType?: string): Promise<RbacAttribute[]>;
+  listAttributes(entityType?: string, opts?: { includeRemoved?: boolean }): Promise<RbacAttribute[]>;
   createAttribute(body: { entity_type: string; attr_key: string; description?: string }): Promise<RbacAttribute>;
+  /** RETIRE (soft delete): rows kept, engine ignores them, sync skips the key. */
   deleteAttribute(id: string): Promise<void>;
+  restoreAttribute(id: string): Promise<RbacAttribute>;
   syncAttrs(): Promise<SyncAttrsResult>;
   listAttrPermissions(entityType?: string): Promise<AttrPermission[]>;
   updateAttrPermission(id: string, body: { can_read?: boolean; can_write?: boolean }): Promise<AttrPermission>;
@@ -158,9 +160,11 @@ export function createFetchClient(opts: FetchClientOptions = {}): AdminApiClient
     me: () => req("GET", paths.me),
 
     listEntityTypes: () => req("GET", `${rbac}/entity-types`),
-    listAttributes: (entity_type) => req("GET", `${rbac}/attributes`, undefined, { entity_type }),
+    listAttributes: (entity_type, o = {}) =>
+      req("GET", `${rbac}/attributes`, undefined, { entity_type, include_removed: o.includeRemoved || undefined }),
     createAttribute: (b) => req("POST", `${rbac}/attributes`, b),
     deleteAttribute: (id) => req("DELETE", `${rbac}/attributes/${id}`),
+    restoreAttribute: (id) => req("POST", `${rbac}/attributes/${id}/restore`),
     syncAttrs: () => req("POST", `${rbac}/sync-attrs`),
     listAttrPermissions: (entity_type) => req("GET", `${rbac}/permissions`, undefined, { entity_type }),
     updateAttrPermission: (id, b) => req("PATCH", `${rbac}/permissions/${id}`, b),

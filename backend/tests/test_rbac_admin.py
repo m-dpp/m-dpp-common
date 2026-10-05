@@ -129,3 +129,25 @@ def test_attribute_key_validation():
         AttributeCreate(entity_type="products", attr_key="*")
     with pytest.raises(ValidationError):
         AttributeCreate(entity_type="products", attr_key="")
+
+
+# ------------------------------------------------------------- retire / restore
+
+def test_retire_and_restore_are_served():
+    paths = _paths(_router())
+    assert ("/admin/rbac/attributes/{attribute_id}", ("DELETE",)) in paths
+    assert ("/admin/rbac/attributes/{attribute_id}/restore", ("POST",)) in paths
+
+
+def test_attribute_out_carries_removed_at():
+    from datetime import datetime, timezone
+    from m_dpp_common.rbac.admin import _attribute_out
+    live = SimpleNamespace(id="x", entity_type="products", attr_key="k", origin="discovered", description="", removed_at=None)
+    assert _attribute_out(live)["removed_at"] is None
+    when = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)
+    gone = SimpleNamespace(**{**vars(live), "removed_at": when})
+    assert _attribute_out(gone)["removed_at"] == when.isoformat()
+
+
+def test_registry_mixin_has_removed_at():
+    assert RbacAttribute.__table__.c.removed_at.nullable is True

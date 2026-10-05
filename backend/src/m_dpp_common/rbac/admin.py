@@ -9,6 +9,11 @@ Everything here treats roles and entity types as **data**:
 - attributes live in the `rbac_attributes` registry per entity type, either
   *discovered* from stored ``attrs`` (``POST /sync-attrs``) or registered
   *manually* (``POST /attributes`` — for computed fields that are never stored).
+  Nothing is ever hard-deleted: ``DELETE /attributes/{id}`` RETIRES a row (any
+  origin — a typo key sync picked up once is the common case), keeping its
+  permission rows so ``POST /attributes/{id}/restore`` brings back exactly the
+  governance it had. While retired the engine ignores those rows and sync skips
+  the key; registering a retired key again by hand restores it.
 
 Creating a role or registering an attribute fans out the missing permission rows
 so the grid stays complete (see :mod:`m_dpp_common.rbac.seed`).
@@ -31,6 +36,7 @@ trail exists to answer "who granted this?").
 
 import re
 import uuid
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
@@ -122,12 +128,14 @@ def _role_out(r) -> dict:
 
 
 def _attribute_out(a) -> dict:
+    removed_at = getattr(a, "removed_at", None)
     return {
         "id": str(a.id),
         "entity_type": a.entity_type,
         "attr_key": a.attr_key,
         "origin": a.origin,
         "description": a.description,
+        "removed_at": removed_at.isoformat() if removed_at else None,
     }
 
 
@@ -286,10 +294,16 @@ def make_rbac_router(
     # ----------------------------------------------------------- attributes
 
     @router.get("/attributes", dependencies=[READ])
-    async def list_attributes(entity_type: str | None = None, db: AsyncSession = Depends(get_db)):
+    async def list_attributes(
+        entity_type: str | None = None,
+        include_removed: bool = False,
+        db: AsyncSession = Depends(get_db),
+    ):
         q = select(RbacAttribute)
         if entity_type:
             q = q.where(RbacAttribute.entity_type == entity_type)
+        if not include_removed:
+            q = q.where(RbacAttribute.removed_at.is_(None))
         result = await db.execute(q.order_by(RbacAttribute.entity_type, RbacAttribute.attr_key))
         return [_attribute_out(a) for a in result.scalars().all()]
 
@@ -308,6 +322,18 @@ def make_rbac_router(
                 )
             )
         ).scalar_one_or_none()
+        if exists is not None and exists.removed_at is not None:
+            # registering a retired key by hand is a restore, not a conflict
+            exists.removed_at = None
+            if body.description:
+                exists.description = body.description
+            inserted = await fan_out_attribute(
+                db, body.entity_type, body.attr_key,
+                role_model=Role, attr_permission_model=AttrPermission,
+            )
+            await db.commit()
+            await db.refresh(exists)
+            return {**_attribute_out(exists), "permission_rows": inserted, "restored": True}
         if exists is not None:
             raise HTTPException(
                 status_code=409, detail=f"Attribute already registered ({exists.origin})"
@@ -329,37 +355,60 @@ def make_rbac_router(
         return {**_attribute_out(attr), "permission_rows": inserted}
 
     @router.delete("/attributes/{attribute_id}", status_code=204, dependencies=[DELETE])
-    async def delete_attribute(attribute_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    async def retire_attribute(attribute_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+        """RETIRE an attribute — a soft delete, any origin. Its permission rows stay
+        (restore brings them back untouched); while retired the engine ignores them
+        and sync skips the key. Idempotent."""
         attr = (
             await db.execute(select(RbacAttribute).where(RbacAttribute.id == attribute_id))
         ).scalar_one_or_none()
         if attr is None:
             raise HTTPException(status_code=404, detail="Attribute not found")
-        if attr.origin != ATTR_ORIGIN_MANUAL:
-            raise HTTPException(
-                status_code=409,
-                detail="Only manually registered attributes can be removed; this one was discovered from stored data",
-            )
-        # attr_permissions rows follow via ON DELETE CASCADE
-        await db.delete(attr)
+        if attr.removed_at is None:
+            attr.removed_at = datetime.now(timezone.utc)
+            await db.commit()
+
+    @router.post("/attributes/{attribute_id}/restore", dependencies=[UPDATE])
+    async def restore_attribute(attribute_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+        """Undo a retire. Fans out any permission row a role added meanwhile lacks."""
+        attr = (
+            await db.execute(select(RbacAttribute).where(RbacAttribute.id == attribute_id))
+        ).scalar_one_or_none()
+        if attr is None:
+            raise HTTPException(status_code=404, detail="Attribute not found")
+        attr.removed_at = None
+        await db.flush()
+        inserted = await fan_out_attribute(
+            db, attr.entity_type, attr.attr_key,
+            role_model=Role, attr_permission_model=AttrPermission,
+        )
         await db.commit()
+        await db.refresh(attr)
+        return {**_attribute_out(attr), "permission_rows": inserted}
 
     @router.post("/sync-attrs", dependencies=[CREATE])
     async def sync_attrs(db: AsyncSession = Depends(get_db)):
         """Discover attribute keys from stored data, register the new ones, and fan
-        out permission rows. Never deletes — manual registrations are untouched."""
-        registered_pairs = {
-            (et, ak)
-            for et, ak in (
-                await db.execute(select(RbacAttribute.entity_type, RbacAttribute.attr_key))
-            ).all()
-        }
+        out permission rows. Never deletes — manual registrations are untouched.
+        A RETIRED key is skipped even if it is still in the data: the admin said
+        so, and the response counts those so they can tell."""
+        rows = (
+            await db.execute(
+                select(RbacAttribute.entity_type, RbacAttribute.attr_key, RbacAttribute.removed_at)
+            )
+        ).all()
+        registered_pairs = {(et, ak) for et, ak, removed in rows if removed is None}
+        retired_pairs = {(et, ak) for et, ak, removed in rows if removed is not None}
         discovered = 0
+        retired_in_data = 0
         new_pairs: list[tuple[str, str]] = []
         for entity_type, sql in attr_keys_sql.items():
             keys = [k for (k,) in (await db.execute(sql)).all()]
             discovered += len(keys)
             for key in keys:
+                if (entity_type, key) in retired_pairs:
+                    retired_in_data += 1
+                    continue
                 if (entity_type, key) not in registered_pairs:
                     db.add(
                         RbacAttribute(
@@ -379,7 +428,12 @@ def make_rbac_router(
             )
         if new_pairs or inserted:
             await db.commit()
-        return {"discovered": discovered, "registered": len(new_pairs), "inserted": inserted}
+        return {
+            "discovered": discovered,
+            "registered": len(new_pairs),
+            "inserted": inserted,
+            "retired_in_data": retired_in_data,
+        }
 
     # ------------------------------------------------- attribute permissions
 

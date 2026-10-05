@@ -33,15 +33,17 @@ cascade was never available anyway.
 """
 
 import uuid
+from datetime import datetime
 
 from sqlalchemy import (
     Boolean,
+    DateTime,
     ForeignKey,
     ForeignKeyConstraint,
     Integer,
     String,
-    UniqueConstraint,
     text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
@@ -84,7 +86,15 @@ class RbacAttributeMixin:
 
     ``origin`` is ``discovered`` (found in stored ``attrs`` by sync) or ``manual``
     (registered by an admin — e.g. a computed response field). Sync never removes
-    rows; only a manual row can be deleted through the admin API.
+    rows. An admin RETIRES one instead (``removed_at``): a typo key that sync picked
+    up once would otherwise sit in the matrix forever. A retired attribute keeps
+    its permission rows, so restoring it restores exactly the governance it had;
+    while retired, the engine ignores those rows (the key behaves as unregistered)
+    and sync neither re-registers nor fans it out.
+
+    Adding ``removed_at`` to an existing installation: the services create their
+    schema with ``create_all``, which never alters a table, so each calls
+    :func:`m_dpp_common.rbac.migration.ensure_rbac_columns` right after it.
     """
 
     __tablename__ = "rbac_attributes"
@@ -98,6 +108,8 @@ class RbacAttributeMixin:
     attr_key: Mapped[str] = mapped_column(String, nullable=False)
     origin: Mapped[str] = mapped_column(String, nullable=False, default=ATTR_ORIGIN_MANUAL)
     description: Mapped[str] = mapped_column(String, nullable=False, default="")
+    #: Set when an admin retires the attribute; NULL while it is in force.
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AttrPermissionMixin:

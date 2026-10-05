@@ -167,9 +167,11 @@ export function createIdentityClient(opts: IdentityClientOptions = {}): Identity
     about: () => req("GET", "/about"),
 
     listEntityTypes: () => req("GET", `${rbac}/entity-types`),
-    listAttributes: (entity_type) => req("GET", `${rbac}/attributes`, undefined, { entity_type }),
+    listAttributes: (entity_type, o = {}) =>
+      req("GET", `${rbac}/attributes`, undefined, { entity_type, include_removed: o.includeRemoved || undefined }),
     createAttribute: (b) => req("POST", `${rbac}/attributes`, b),
     deleteAttribute: (id) => req("DELETE", `${rbac}/attributes/${id}`),
+    restoreAttribute: (id) => req("POST", `${rbac}/attributes/${id}/restore`),
     syncAttrs: () => req("POST", `${rbac}/sync-attrs`),
     listAttrPermissions: (entity_type) => req("GET", `${rbac}/permissions`, undefined, { entity_type }),
     updateAttrPermission: (id, b) => req("PATCH", `${rbac}/permissions/${id}`, b),

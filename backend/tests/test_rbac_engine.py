@@ -198,3 +198,23 @@ async def test_denial_of_a_resolved_role_stays_plain():
     with pytest.raises(HTTPException) as ei:
         await _engine(with_roles=False).check_resource_permission(principal, "create", "products", db)
     assert ei.value.detail == "Role(s) recycler not permitted to create products"
+
+
+# ------------------------------------------------------------- retired attributes
+
+async def test_engine_accepts_attribute_model_and_still_denies():
+    """With the registry bound, the denied-keys query carries the retired filter;
+    the mocked db answers as before, so behaviour for a live key is unchanged."""
+    from m_dpp_common.rbac import RbacAttributeMixin
+
+    class RbacAttribute(RbacAttributeMixin, Base):
+        pass
+
+    eng = RbacEngine(
+        attr_permission_model=AttrPermission,
+        resource_permission_model=ResourcePermission,
+        attribute_model=RbacAttribute,
+    )
+    with pytest.raises(HTTPException) as exc:
+        await eng.assert_writable_attrs({"secret": 1}, "public", _db(denied_keys=["secret"]), entity_type="products")
+    assert exc.value.status_code == 403

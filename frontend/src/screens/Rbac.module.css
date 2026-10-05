@@ -20,3 +20,10 @@
 .removeAttr { border: none; background: none; color: var(--mdpp-faint); cursor: pointer; padding: 0 4px; font-size: 13px; line-height: 1; border-radius: 3px; }
 .removeAttr:hover { color: var(--mdpp-error); background: var(--mdpp-error-bg); }
 .desc { color: var(--mdpp-muted); font-size: var(--mdpp-fs-xs); }
+/* retired attributes: shown on demand, rules kept but ignored */
+.retiredRow td { opacity: 0.55; }
+.retiredRow:hover td { opacity: 0.85; }
+.retiredKey { text-decoration: line-through; }
+.retiredTag { font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--mdpp-warn); border: 1px dashed var(--mdpp-warn); border-radius: 999px; padding: 0 6px; }
+.restoreAttr { border: 1px dashed var(--mdpp-accent); background: transparent; color: var(--mdpp-accent); cursor: pointer; padding: 0 6px; font: inherit; font-size: 10.5px; line-height: 16px; border-radius: 999px; }
+.restoreAttr:hover { background: var(--mdpp-accent-soft); }

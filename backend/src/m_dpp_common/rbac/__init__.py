@@ -1,5 +1,6 @@
 from m_dpp_common.rbac.admin import make_rbac_router
 from m_dpp_common.rbac.engine import BoundRbac, RbacEngine, as_roles, principal_roles
+from m_dpp_common.rbac.migration import ensure_rbac_columns, reset_rbac_tables
 from m_dpp_common.rbac.platform import (
     APP_RESOURCE_TYPES,
     COMMON_RESOURCE_DEFAULTS,
@@ -61,6 +62,8 @@ __all__ = [
     "NEW_ROLE_RESOURCE_DEFAULTS",
     "NEW_ROLE_ATTR_DEFAULTS",
     "seed_rbac",
+    "ensure_rbac_columns",
+    "reset_rbac_tables",
     "fan_out_role",
     "fan_out_attribute",
 ]

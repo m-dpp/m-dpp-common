@@ -277,6 +277,19 @@ entity-agnostic.
   verified evidence, and Refresh reloaded only the list — so the expanded row kept asking without
   `declaration_path` until a browser reload. Declaring on the variant "fixed" it only because
   declaring triggers the host's recomputation. Evidence changes the basis; the host must be told.
+- 2026-10-05 (0.14.0): attributes are RETIRED, never deleted. `DELETE /admin/rbac/attributes/{id}`
+  sets `removed_at` on any origin (the old rule, "only manual rows can go", left a typo key that
+  sync discovered once in the matrix forever); `POST …/restore` clears it. Permission rows are
+  KEPT, so restore returns exactly the governance the key had; while retired the engine ignores them
+  (`RbacEngine(attribute_model=…)` — without it an older binding keeps enforcing, safe but untidy),
+  `fan_out_role` skips them, and sync neither re-registers nor fans out a retired key even if it is
+  still in the data — it reports `retired_in_data` instead. Registering a retired key by hand is a
+  restore, not a 409. The screen hides retired rows behind "Show retired (N)".
+- 2026-10-05 (0.14.0): **`ensure_rbac_columns`** — the first additive schema step. Both apps create
+  their schema with `create_all`, which never ALTERs, and neither has an Alembic revision, so a
+  column a mixin gains later is missing on every installation that already has data (the pilot).
+  `ADDITIVE_COLUMNS` is replayed at every boot with `ADD COLUMN IF NOT EXISTS`; append, never edit.
+  Every app calls it right after `create_all`. A breaking shape still goes through `reset_rbac_tables`.
 
 ## Open questions
 - Whether any mdpp data is non-public (decides how much read-RBAC mdpp needs).

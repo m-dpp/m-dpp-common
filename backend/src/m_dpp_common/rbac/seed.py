@@ -102,7 +102,13 @@ async def fan_out_role(
     if attr_permission_model is not None and attribute_model is not None:
         Attr, Reg = attr_permission_model, attribute_model
         a_defaults = attr_defaults or NEW_ROLE_ATTR_DEFAULTS
-        registered = (await db.execute(select(Reg.entity_type, Reg.attr_key))).all()
+        # retired attributes are left alone: a row for a new role would only be
+        # ignored by the engine, and would resurrect the key's grid on restore
+        registered = (
+            await db.execute(
+                select(Reg.entity_type, Reg.attr_key).where(Reg.removed_at.is_(None))
+            )
+        ).all()
         have = {
             (et, ak)
             for et, ak in (

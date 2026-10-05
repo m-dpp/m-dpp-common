@@ -129,6 +129,9 @@ export interface RbacAttribute {
   attr_key: string;
   origin: AttrOrigin;
   description: string;
+  /** Set when an admin RETIRED the attribute (soft delete). Its permission rows are
+   *  kept but ignored; sync skips the key; restore brings it back as it was. */
+  removed_at: string | null;
 }
 
 export interface AttrPermission {
@@ -155,6 +158,8 @@ export interface SyncAttrsResult {
   discovered: number;
   registered: number;
   inserted: number;
+  /** Keys found in the data that an admin has retired — skipped, not re-registered. */
+  retired_in_data: number;
 }
 
 

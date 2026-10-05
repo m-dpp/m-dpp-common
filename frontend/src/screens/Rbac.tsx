@@ -2,7 +2,7 @@ import { ReactNode, createContext, useContext, useEffect, useMemo, useState } fr
 import type { RbacApi } from "../api/client";
 import { useApi } from "../api/context";
 import { usePrincipal } from "../api/principal";
-import type { AttrPermission, ResourceAction, ResourcePermission, Role } from "../api/types";
+import type { AttrPermission, ResourceAction, ResourcePermission, Role, RbacAttribute } from "../api/types";
 import { useIdentity } from "../identity/context";
 import { Button } from "../design/Button";
 import { Card, CardBody, CardHeader } from "../design/Card";
@@ -239,7 +239,12 @@ function AttributesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
     if (!entityType && entityTypes.data?.length) setEntityType(entityTypes.data[0]);
   }, [entityTypes.data, entityType]);
 
-  const attributes = useAsync(() => (entityType ? api.listAttributes(entityType) : Promise.resolve([])), [api, entityType]);
+  // retired ones come along and are split out here: one fetch, one toggle
+  const attributes = useAsync(() => (entityType ? api.listAttributes(entityType, { includeRemoved: true }) : Promise.resolve([])), [api, entityType]);
+  const [showRetired, setShowRetired] = useState(false);
+  const active = useMemo(() => (attributes.data ?? []).filter((a) => !a.removed_at), [attributes.data]);
+  const retired = useMemo(() => (attributes.data ?? []).filter((a) => a.removed_at), [attributes.data]);
+  const rows = showRetired ? [...active, ...retired] : active;
   const permissions = useAsync(() => (entityType ? api.listAttrPermissions(entityType) : Promise.resolve([])), [api, entityType]);
   const [adding, setAdding] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -275,17 +280,36 @@ function AttributesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
       const r = await api.syncAttrs();
       await reloadAll();
       setErr(null);
-      setInfo(`Sync: ${r.discovered} keys found in stored data, ${r.registered} newly registered, ${r.inserted} permission rows added.`);
+      setInfo(
+        `Sync: ${r.discovered} keys found in stored data, ${r.registered} newly registered, ${r.inserted} permission rows added.` +
+          (r.retired_in_data ? ` ${r.retired_in_data} retired key${r.retired_in_data === 1 ? " is" : "s are"} still present in the data and stayed retired.` : ""),
+      );
     } catch (e) {
       setErr(errorMessage(e));
     }
   }
   const [info, setInfo] = useState<string | null>(null);
 
-  async function removeAttr(id: string) {
+  async function retireAttr(a: RbacAttribute) {
+    if (
+      !window.confirm(
+        `Retire “${a.attr_key}”?\n\nIt leaves this matrix and its rules stop applying — the key behaves as if it had never been registered. Nothing is deleted from any product. Sync will not bring it back; Restore will, with the same rules it has now.`,
+      )
+    )
+      return;
     setErr(null);
     try {
-      await api.deleteAttribute(id);
+      await api.deleteAttribute(a.id);
+      await reloadAll();
+    } catch (e) {
+      setErr(errorMessage(e));
+    }
+  }
+
+  async function restoreAttr(a: RbacAttribute) {
+    setErr(null);
+    try {
+      await api.restoreAttribute(a.id);
       await reloadAll();
     } catch (e) {
       setErr(errorMessage(e));
@@ -302,8 +326,13 @@ function AttributesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
             {entityTypes.data && entityTypes.data.length > 0 && (
               <SegmentedControl size="sm" value={entityType} onChange={setEntityType} options={entityTypes.data.map((t) => ({ value: t, label: t }))} aria-label="Entity type" />
             )}
+            {retired.length > 0 && (
+              <Button size="sm" variant="ghost" onClick={() => setShowRetired((v) => !v)} title="Retired attributes keep their rules but are ignored until restored">
+                {showRetired ? "Hide" : "Show"} retired ({retired.length})
+              </Button>
+            )}
             {perms.create && (
-              <Button size="sm" onClick={sync} title="Discover attribute keys from stored data (never deletes)">
+              <Button size="sm" onClick={sync} title="Discover attribute keys from stored data (never deletes; a retired key stays retired)">
                 Sync from data
               </Button>
             )}
@@ -323,8 +352,8 @@ function AttributesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
         )}
         {roles.length === 0 ? (
           <EmptyState compact title="No active roles" description="Add or activate a role first — the columns of this matrix are the roles." />
-        ) : (attributes.data ?? []).length === 0 ? (
-          <EmptyState compact title={attributes.loading ? "Loading…" : `No attributes registered for ${entityType || "this entity type"}`} description="Register attributes manually (including computed ones that never appear in stored data), or sync them from the data." />
+        ) : rows.length === 0 ? (
+          <EmptyState compact title={attributes.loading ? "Loading…" : `No attributes registered for ${entityType || "this entity type"}`} description={retired.length ? `Every registered attribute is retired (${retired.length}) — show them to restore one.` : "Register attributes manually (including computed ones that never appear in stored data), or sync them from the data."} />
         ) : (
           <Table compact stickyHeader maxHeight="calc(100vh - 280px)" className={s.matrix}>
             <thead>
@@ -338,18 +367,29 @@ function AttributesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
               </tr>
             </thead>
             <tbody>
-              {(attributes.data ?? []).map((a) => (
-                <tr key={a.id}>
+              {rows.map((a) => (
+                <tr key={a.id} className={a.removed_at ? s.retiredRow : undefined}>
                   <td>
                     <span className={s.attrKey}>
-                      <span>{a.attr_key}</span>
+                      <span className={a.removed_at ? s.retiredKey : undefined}>{a.attr_key}</span>
                       <span className={s.origin} title={a.origin === "manual" ? "registered by an admin" : "discovered from stored data"}>
                         {a.origin}
                       </span>
-                      {a.origin === "manual" && perms.delete && (
-                        <button type="button" className={s.removeAttr} onClick={() => removeAttr(a.id)} aria-label={`Remove ${a.attr_key}`} title="Remove registration (manual attributes only)">
-                          ×
-                        </button>
+                      {a.removed_at ? (
+                        <>
+                          <span className={s.retiredTag} title={`retired ${new Date(a.removed_at).toLocaleString()} — rules kept but ignored`}>retired</span>
+                          {perms.update && (
+                            <button type="button" className={s.restoreAttr} onClick={() => restoreAttr(a)} title="Bring it back with the rules it had">
+                              restore
+                            </button>
+                          )}
+                        </>
+                      ) : (
+                        perms.delete && (
+                          <button type="button" className={s.removeAttr} onClick={() => retireAttr(a)} aria-label={`Retire ${a.attr_key}`} title="Retire: leaves the matrix, rules stop applying, restorable">
+                            ×
+                          </button>
+                        )
                       )}
                     </span>
                     {a.description && <div className={s.desc}>{a.description}</div>}
@@ -364,7 +404,7 @@ function AttributesPanel({ roles, perms }: { roles: Role[]; perms: Perms }) {
                           size_="sm"
                           className={[s.cell, s[acc]].join(" ")}
                           value={acc}
-                          disabled={busyKey === p.id || !perms.update}
+                          disabled={busyKey === p.id || !perms.update || !!a.removed_at}
                           onChange={(e) => setAccess(p, e.target.value as Access)}
                           aria-label={`${a.attr_key} for ${r.label}`}
                           options={[
