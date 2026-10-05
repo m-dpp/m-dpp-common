@@ -55,3 +55,21 @@
 .imgEdit { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .imgEdit > :first-child { flex: 1; min-width: 0; }
 .inherited .thumb { opacity: 0.65; }
+
+/* ---------- link ---------- */
+.link { color: var(--mdpp-accent); text-decoration: none; word-break: break-all; font-family: var(--mdpp-mono); font-size: var(--mdpp-fs-xs); }
+.link:hover { text-decoration: underline; }
+.ext { margin-left: 3px; font-size: 10px; color: var(--mdpp-muted); font-family: var(--mdpp-font); }
+.openLink { flex-shrink: 0; font-size: var(--mdpp-fs-xs); color: var(--mdpp-accent); text-decoration: none; white-space: nowrap; }
+.openLink:hover { text-decoration: underline; }
+
+/* ---------- quantity (number + unit) ---------- */
+.unit { color: var(--mdpp-text-2); }
+.qtyEdit { display: grid; grid-template-columns: minmax(0, 1fr) 72px; gap: 6px; min-width: 0; }
+.unitInput { font-family: var(--mdpp-mono); }
+
+/* ---------- import JSON ---------- */
+.importBtn { margin-left: auto; }
+.importBox { display: flex; flex-direction: column; gap: 10px; }
+.importText { min-height: 220px; font-family: var(--mdpp-mono); font-size: var(--mdpp-fs-xs); resize: vertical; width: 100%; box-sizing: border-box; }
+.importHead { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

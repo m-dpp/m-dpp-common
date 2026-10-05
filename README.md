@@ -265,13 +265,13 @@ Edits an arbitrary JSON object without the user ever typing JSON. Free-form (any
 <AttrsViewer value={attrs} />                                               // = view mode
 ```
 
-Node model: a **leaf** is `text | number | boolean | date | image` (date = `YYYY-MM-DD`; image = an **image link** — a plain URL string that is recognised as an image by its extension `.png .jpg .jpeg .gif .webp .avif .svg .bmp` or a `data:image/…` URI, and rendered as a small thumbnail that opens the full image in a new tab; only `http(s)` and `data:image` sources are ever put in an `<img>`), a **complex** node is `object` (named children) or `list` (ordered children shown as `[0]`, `[1]`). Nesting is unlimited. Add controls **＋ field / ＋ object / ＋ list** exist at the root and inside every complex node; remove removes a subtree; changing a node's type coerces the value and asks before discarding children. `readOnlyKeys` are shown but not editable (their subtree too); `hiddenKeys` are not rendered and pass through `onChange` untouched. `provenance` maps a top-level key to `{ source, label?, inherited }`; inherited values render muted with a small `↑ label` marker, and rows without provenance render normally.
+Node model: a **leaf** is `text | number | quantity | boolean | date | link | image` (date = `YYYY-MM-DD`; link = any other `http(s)` URL — a plain string, rendered as an anchor that opens in a new tab, its key serving as the label; image = an **image link** — a plain URL string that is recognised as an image by its extension `.png .jpg .jpeg .gif .webp .avif .svg .bmp`, by an `fm=`/`format=` query parameter, or a `data:image/…` URI, and rendered as a small thumbnail that opens the full image in a new tab; only `http(s)` and `data:image` sources are ever put in an `<img>`; quantity = a number with a unit of measure, stored as `{"value": 30, "unit": "cm"}` — schema.org's `QuantitativeValue` shape — and collapsing to a bare number when the unit is empty), a **complex** node is `object` (named children) or `list` (ordered children shown as `[0]`, `[1]`). Nesting is unlimited. Add controls **＋ field / ＋ object / ＋ list** exist at the root and inside every complex node; **⤓ import JSON** (root, edit mode, `allowImport`) pastes an object whose keys merge into the top level (or replace it), with types inferred from the values exactly as for stored data; remove removes a subtree; changing a node's type coerces the value and asks before discarding children. `readOnlyKeys` are shown but not editable (their subtree too); `hiddenKeys` are not rendered and pass through `onChange` untouched. `provenance` maps a top-level key to `{ source, label?, inherited }`; inherited values render muted with a small `↑ label` marker, and rows without provenance render normally.
 
 Example value the editor round-trips (nesting, list of mixed items, a date, a null):
 
 ```json
 {
-  "product_name": "Merino Knit Jacket",
+  "label": "Merino Knit Jacket",
   "weight_gsm": 320,
   "recyclable": true,
   "production_date": "2026-03-15",

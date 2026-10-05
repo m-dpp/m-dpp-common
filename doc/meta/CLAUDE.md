@@ -250,6 +250,22 @@ entity-agnostic.
   fetching needs uses `effectiveClaims` directly — the rule must not differ, the round trips may.
 - (Append new mdpp-common decisions here.)
 
+- 2026-10-05 (0.13.0): AttrsEditor leaf types `link` and `quantity`, and **Import JSON**. A link is
+  any http(s) URL that is not an image — a plain string, rendered as an anchor opening a new tab,
+  the key serving as its label; no other scheme ever becomes clickable. A quantity is a number with a
+  unit of measure stored as `{"value": 30, "unit": "cm"}` (schema.org `QuantitativeValue`, the GS1
+  Web Vocab shape), recognised by that exact shape (`isQuantity`) and collapsing to a bare number
+  when the unit is cleared, so data that never had a unit is untouched. Types are still never stored:
+  every leaf type is inferred from the value, which is what lets a viewer with only the JSON render
+  it the same way. Import JSON (`allowImport`, root, edit mode) merges a pasted object into the top
+  level — an existing key is replaced in place, a new one appended — or replaces it; read-only keys
+  are never touched by either. `mergeImported` / `parseImportedJson` are exported for hosts.
+- 2026-10-05 (0.13.0): `comparisons()` RETHROWS anything but 403/404. It used to turn every failure
+  into `null`, which whoever applies the inheritance rule (`effectiveClaims`) reads as "this level
+  declares nothing" — so a failed lookup on the model silently produced the undeclared-everywhere
+  verdicts the two-pass rule exists to prevent, with nothing on screen to say so. "Nothing here" and
+  "not yours to read" remain answers; a failure is not an answer.
+
 ## Open questions
 - Whether any mdpp data is non-public (decides how much read-RBAC mdpp needs).
 - ~~One organisation per user, or several.~~ **Resolved 2026-09-20: several.**

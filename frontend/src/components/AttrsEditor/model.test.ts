@@ -6,7 +6,10 @@ import {
   duplicateKeys,
   fromJson,
   inferType,
+  isQuantity,
+  mergeImported,
   newComplex,
+  parseImportedJson,
   newLeaf,
   removeNode,
   toJson,
@@ -43,9 +46,9 @@ describe("inferType", () => {
     // image CDNs name the format in the query instead of the path
     expect(inferType("https://images.unsplash.com/photo-1579206464424-7e43a81cadc1?w=640&fm=jpg&crop=entropy")).toBe("image");
     expect(inferType("https://cdn.example/img/abc?format=WEBP")).toBe("image");
-    expect(inferType("https://cdn.example/img/abc?fm=pdf")).toBe("text");
-    expect(inferType("https://example.com/product/123")).toBe("text");
-    expect(inferType("https://example.com/report.pdf")).toBe("text");
+    expect(inferType("https://cdn.example/img/abc?fm=pdf")).toBe("link"); // a URL, just not an image
+    expect(inferType("https://example.com/product/123")).toBe("link");
+    expect(inferType("https://example.com/report.pdf")).toBe("link");
     expect(inferType("javascript:alert(1).png")).toBe("text");
     expect(inferType("photo.jpg")).toBe("text");
   });
@@ -132,5 +135,86 @@ describe("tree ops", () => {
     const removed = removeNode(nodes, wash.id);
     expect((toJson(removed).care as any)).toEqual({ dry: "flat" });
     expect(removeNode(nodes, "missing")).toBe(nodes);
+  });
+});
+
+describe("link", () => {
+  it("is any http(s) URL that is not an image — never another scheme", () => {
+    expect(inferType("https://example.com/care-instructions")).toBe("link");
+    expect(inferType("http://example.com")).toBe("link");
+    expect(inferType("https://example.com/report.pdf")).toBe("link");
+    expect(inferType("https://cdn.example/p/jacket.jpg")).toBe("image");
+    expect(inferType("ftp://example.com/x")).toBe("text");
+    expect(inferType("javascript:alert(1)")).toBe("text");
+    expect(inferType("example.com/no-scheme")).toBe("text");
+    expect(inferType("https://not a url")).toBe("text");
+  });
+
+  it("round-trips as a plain string", () => {
+    const v = { care: "https://example.com/care" };
+    const [n] = fromJson(v);
+    expect(n.type).toBe("link");
+    expect(toJson([n])).toEqual(v);
+  });
+});
+
+describe("quantity", () => {
+  it("is exactly {value, unit} with a numeric (or null) value", () => {
+    expect(isQuantity({ value: 12, unit: "cm" })).toBe(true);
+    expect(isQuantity({ value: null, unit: "cm" })).toBe(true);
+    expect(isQuantity({ value: 12, unit: "cm", extra: 1 })).toBe(false);
+    expect(isQuantity({ value: "12", unit: "cm" })).toBe(false);
+    expect(isQuantity({ value: 12 })).toBe(false);
+    expect(isQuantity([12, "cm"])).toBe(false);
+    expect(inferType({ value: 12, unit: "cm" })).toBe("quantity");
+    expect(inferType({ value: 12, unit: "cm", note: "x" })).toBe("object");
+  });
+
+  it("round-trips, and collapses to a bare number when the unit is cleared", () => {
+    const v = { width: { value: 30, unit: "cm" } };
+    const [n] = fromJson(v);
+    expect(n.type).toBe("quantity");
+    expect(n.value).toBe(30);
+    expect(n.unit).toBe("cm");
+    expect(toJson([n])).toEqual(v);
+    expect(toJson([{ ...n, unit: "  " }])).toEqual({ width: 30 });
+    expect(toJson([{ ...n, value: null }])).toEqual({ width: { value: null, unit: "cm" } });
+  });
+
+  it("number ⇄ quantity keeps the number; leaving quantity drops the unit", () => {
+    const q = changeType(newLeaf("number", "w", 320), "quantity");
+    expect(q.type).toBe("quantity");
+    expect(q.value).toBe(320);
+    expect(q.unit).toBe("");
+    const back = changeType({ ...q, unit: "gsm" }, "number");
+    expect(back.value).toBe(320);
+    expect(back.unit).toBeUndefined();
+    expect(toJson([back])).toEqual({ w: 320 });
+    expect(coerceValue("12.5", "quantity")).toBe(12.5);
+    expect(coerceValue("abc", "quantity")).toBeNull();
+  });
+});
+
+describe("import", () => {
+  it("merge replaces an existing key in place and appends new ones", () => {
+    const nodes = fromJson({ a: 1, b: "two", c: true });
+    const merged = mergeImported(nodes, { b: "TWO", d: "https://example.com/d" });
+    expect(merged.map((n) => n.key)).toEqual(["a", "b", "c", "d"]);
+    expect(toJson(merged)).toEqual({ a: 1, b: "TWO", c: true, d: "https://example.com/d" });
+    expect(merged[3].type).toBe("link");
+    // the original is untouched
+    expect(toJson(nodes)).toEqual({ a: 1, b: "two", c: true });
+  });
+
+  it("replace discards the current tree", () => {
+    const nodes = fromJson({ a: 1 });
+    expect(toJson(mergeImported(nodes, { z: { value: 1, unit: "kg" } }, "replace"))).toEqual({ z: { value: 1, unit: "kg" } });
+  });
+
+  it("parses only a JSON object, with a readable error otherwise", () => {
+    expect(parseImportedJson('{"a": 1}')).toEqual({ a: 1 });
+    expect(() => parseImportedJson("[1, 2]")).toThrow(/must be an object/);
+    expect(() => parseImportedJson('"x"')).toThrow(/must be an object/);
+    expect(() => parseImportedJson("{a: 1}")).toThrow(/Not valid JSON/);
   });
 });
