@@ -10,4 +10,5 @@ export * from "./SegmentedControl";
 export * from "./Modal";
 export * from "./EmptyState";
 export * from "./Notice";
+export * from "./Disclosure";
 export * from "./AppShell";

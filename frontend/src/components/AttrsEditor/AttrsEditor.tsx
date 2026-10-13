@@ -60,7 +60,7 @@ export interface AttrsEditorProps {
   provenance?: Record<string, AttrProvenance>;
   emptyText?: string;
   compact?: boolean;
-  /** Edit mode: start with complex nodes collapsed. */
+  /** Start with objects and lists folded (both modes). They unfold one at a time, or all at once. */
   collapsedByDefault?: boolean;
   /** Edit mode: offer "Import JSON" (paste an object; keys merge into the top level). Default true. */
   allowImport?: boolean;
@@ -192,8 +192,11 @@ function ViewValue({ node }: { node: AttrNode }) {
   return <span>{String(node.value)}</span>;
 }
 
-function ViewRow({ node, inList, provenance }: { node: AttrNode; inList: boolean; provenance?: AttrProvenance }) {
+function ViewRow({ node, inList, provenance, collapsedByDefault }: { node: AttrNode; inList: boolean; provenance?: AttrProvenance; collapsedByDefault?: boolean }) {
   const inherited = provenance?.inherited === true;
+  // objects and lists fold; the summary ("object · 3") stays, so a folded node
+  // still says what it holds. Remounted by the host's collapse/expand-all.
+  const [open, setOpen] = useState(!collapsedByDefault);
   const keyEl = inList ? <span className={s.index}>[{node.key}]</span> : <span className={s.key}>{node.key}</span>;
   const marker = inherited ? (
     <span className={s.source} title={`inherited from ${provenance!.source}`}>
@@ -205,16 +208,19 @@ function ViewRow({ node, inList, provenance }: { node: AttrNode; inList: boolean
     return (
       <div className={[s.vrow, s.vrowComplex, inherited ? s.inherited : ""].join(" ")}>
         <div className={s.vkey}>
+          <button type="button" className={s.toggle} onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-label={open ? "Collapse" : "Expand"}>
+            {open ? "▼" : "▶"}
+          </button>
           {keyEl}
           <span className={s.typeHint}>
             {TYPE_LABEL[node.type]} · {node.children.length}
           </span>
           {marker}
         </div>
-        {node.children.length > 0 && (
+        {open && node.children.length > 0 && (
           <div className={s.children}>
             {node.children.map((c) => (
-              <ViewRow key={c.id} node={c} inList={node.type === "list"} />
+              <ViewRow key={c.id} node={c} inList={node.type === "list"} collapsedByDefault={collapsedByDefault} />
             ))}
           </div>
         )}
@@ -556,6 +562,8 @@ export function AttrsEditor({
 
   const [pendingType, setPendingType] = useState<{ id: string; to: NodeType; count: number } | null>(null);
   const [importing, setImporting] = useState(false);
+  // view mode: the default fold for every object and list, bumped to re-apply it
+  const [fold, setFold] = useState({ collapsed: !!collapsedByDefault, epoch: 0 });
 
   const ctx: EditCtx = useMemo(
     () => ({
@@ -595,16 +603,29 @@ export function AttrsEditor({
 
   if (mode === "view") {
     const viewNodes = fromJson(visibleValue);
+    const foldable = viewNodes.some((n) => hasComplex(n));
     return (
       <div className={[s.root, compact ? s.compact : ""].join(" ")}>
         {viewNodes.length === 0 ? (
           <div className={s.empty}>{emptyText}</div>
         ) : (
           <>
-            {viewNodes.map((n) => <ViewRow key={n.id} node={n} inList={false} provenance={provenance?.[n.key]} />)}
-            {allowCopy && (
+            {/* collapse/expand-all works by remounting the rows with a new default:
+                each row keeps its own fold state, so there is nothing to walk */}
+            {viewNodes.map((n) => <ViewRow key={`${n.id}:${fold.epoch}`} node={n} inList={false} provenance={provenance?.[n.key]} collapsedByDefault={fold.collapsed} />)}
+            {(allowCopy || foldable) && (
               <div className={s.viewTools}>
-                <CopyJsonButton getJson={() => visibleValue as JsonObject} />
+                {foldable && (
+                  <>
+                    <button type="button" className={s.adderBtn} onClick={() => setFold((f) => ({ collapsed: true, epoch: f.epoch + 1 }))} title="Fold every object and list">
+                      ⊟ collapse all
+                    </button>
+                    <button type="button" className={s.adderBtn} onClick={() => setFold((f) => ({ collapsed: false, epoch: f.epoch + 1 }))} title="Unfold every object and list">
+                      ⊞ expand all
+                    </button>
+                  </>
+                )}
+                {allowCopy && <CopyJsonButton getJson={() => visibleValue as JsonObject} />}
               </div>
             )}
           </>
@@ -649,6 +670,10 @@ export function AttrsEditor({
       </Modal>
     </div>
   );
+}
+
+function hasComplex(n: AttrNode): boolean {
+  return isComplex(n.type) || n.children.some(hasComplex);
 }
 
 function findInTree(nodes: AttrNode[], id: string): AttrNode | undefined {
