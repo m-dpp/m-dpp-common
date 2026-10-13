@@ -38,6 +38,15 @@ export function UsersAndLinks({ resourceType = "subjects" }: UsersAndLinksProps)
   const [linking, setLinking] = useState<Subject | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // What would lock you out is refused by the identity service; the controls
+  // say so up front rather than letting the click fail. Your own subject can
+  // never be deleted; the membership you are ACTING through cannot be unlinked.
+  // A secondary membership of your own still can — it is not the access in use.
+  const isSelf = (x: Subject) => principal?.sub != null && principal.sub === x.sub;
+  const actingOrgId = principal?.organisation?.id ?? null;
+  const SELF_DELETE = "You cannot delete yourself — it would remove the access you are using. Ask another administrator.";
+  const SELF_UNLINK = "You cannot unlink yourself from the organisation you are acting as — it is the access you are using. Ask another administrator.";
+
   async function changed() {
     await subjects.reload();
     await refreshPrincipal();
@@ -114,7 +123,8 @@ export function UsersAndLinks({ resourceType = "subjects" }: UsersAndLinksProps)
                             <button
                               type="button"
                               className={s.unlink}
-                              title={`Unlink from ${m.organisation?.name ?? "this organisation"}`}
+                              disabled={isSelf(x) && m.organisation?.id === actingOrgId}
+                              title={isSelf(x) && m.organisation?.id === actingOrgId ? SELF_UNLINK : `Unlink from ${m.organisation?.name ?? "this organisation"}`}
                               onClick={() => run(() => api.deleteMembership(m.id))}
                             >
                               ×
@@ -158,7 +168,7 @@ export function UsersAndLinks({ resourceType = "subjects" }: UsersAndLinksProps)
                         </Button>
                       )}
                       {mayDelete && (
-                        <Button size="sm" variant="danger" onClick={() => run(() => api.deleteSubject(x.id))} title="Delete subject">
+                        <Button size="sm" variant="danger" disabled={isSelf(x)} onClick={() => run(() => api.deleteSubject(x.id))} title={isSelf(x) ? SELF_DELETE : "Delete subject"}>
                           Delete
                         </Button>
                       )}

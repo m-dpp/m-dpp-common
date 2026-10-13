@@ -187,6 +187,10 @@ interface DetailProps {
 
 function OrganisationDetail({ org, roles, assignments, linkedUsers, canUpdate, canDelete, canAssignRoles, onClose, onChanged }: DetailProps) {
   const api = useIdentity();
+  // Deactivating the organisation you act through makes your next request
+  // anonymous. The identity service refuses it; the button says so first.
+  const { principal } = usePrincipal();
+  const acting = principal?.organisation?.id === org.id;
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(org.name);
   const initialId = organisationIdentifier(org);
@@ -341,7 +345,14 @@ function OrganisationDetail({ org, roles, assignments, linkedUsers, canUpdate, c
       {editing && (
         <CardFooter>
           {canDelete && (
-            <Button variant="danger" size="sm" disabled={busy} onClick={() => run(() => api.removeOrganisation(org.id)).then(() => setEditing(false))} style={{ marginRight: "auto" }}>
+            <Button
+              variant="danger"
+              size="sm"
+              disabled={busy || acting}
+              title={acting ? "You cannot deactivate the organisation you are acting as — it is the access you are using. Ask another administrator." : undefined}
+              onClick={() => run(() => api.removeOrganisation(org.id)).then(() => setEditing(false))}
+              style={{ marginRight: "auto" }}
+            >
               Deactivate
             </Button>
           )}

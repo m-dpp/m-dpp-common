@@ -7,3 +7,4 @@
 .unlink { border: none; background: none; cursor: pointer; color: var(--mdpp-muted);
           font-size: 13px; line-height: 1; padding: 0 2px; }
 .unlink:hover { color: var(--mdpp-error); }
+.unlink:disabled, .unlink:disabled:hover { color: var(--mdpp-muted); opacity: 0.4; cursor: not-allowed; }
