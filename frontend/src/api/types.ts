@@ -217,3 +217,10 @@ export interface IdentityAbout {
   platform_organisation: { id: string; name: string } | null;
   roles: { name: string; label: string | null; description: string; active: boolean }[];
 }
+
+/**
+ * Roles the installation is administered with. The identity service refuses to
+ * revoke them from the platform organisation or to deactivate them — either
+ * would lock everyone out — so the screens offer neither.
+ */
+export const GOVERNING_ROLES: ReadonlySet<string> = new Set(["platform_admin", "administrator"]);

@@ -100,6 +100,31 @@ def test_router_exposes_dynamic_endpoints():
     assert ("/admin/rbac/sync-attrs", ("POST",)) in paths
 
 
+def test_the_removal_and_role_update_hooks_are_accepted():
+    """A service may refuse a revocation or a role change — identity keeps the
+    platform organisation's governing roles this way."""
+    async def refuse_removal(assignment, db):  # noqa: ARG001
+        raise AssertionError("not called at mount time")
+
+    async def refuse_update(role, changes, db):  # noqa: ARG001
+        raise AssertionError("not called at mount time")
+
+    router = make_rbac_router(
+        get_db=lambda: None,
+        role_model=Role,
+        attr_permission_model=AttrPermission,
+        attribute_model=RbacAttribute,
+        organisation_role_model=OrganisationRole,
+        resource_permission_model=ResourcePermission,
+        resource_tables={"organisations": _model("organisations")},
+        validate_organisation_role_removal=refuse_removal,
+        validate_role_update=refuse_update,
+    )
+    served = _paths(router)
+    assert ("/admin/rbac/organisation-roles/{assignment_id}", ("DELETE",)) in served
+    assert ("/admin/rbac/roles/{name}", ("PATCH",)) in served
+
+
 def test_a_service_without_a_roles_table_leaves_those_endpoints_out():
     """Roles and their assignments live in m-dpp-identity. An app that mounts
     this router has the attribute and resource matrices — which ARE per app —

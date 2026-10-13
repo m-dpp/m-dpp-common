@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useIdentity } from "../identity/context";
 import { usePrincipal } from "../api/principal";
+import { GOVERNING_ROLES } from "../api/types";
 import type { Organisation, Role } from "../api/types";
 import { AttrsEditor } from "../components/AttrsEditor/AttrsEditor";
 import { attrsPatch } from "../components/attrsPatch";
@@ -314,7 +315,14 @@ function OrganisationDetail({ org, roles, assignments, linkedUsers, canUpdate, c
           <div className={s.roleRow}>
             {held.length === 0 && <span className="mdpp-faint">No roles — subjects representing this organisation resolve to the anonymous role.</span>}
             {assignments.map((a) => (
-              <Tag key={a.id} onRemove={canAssignRoles && editing ? () => run(() => api.removeOrganisationRole(a.id)) : undefined} removeLabel={`Remove role ${a.role_name}`}>
+              // the platform organisation keeps the roles it is administered
+              // with — identity refuses the revocation, so no cross is offered
+              <Tag
+                key={a.id}
+                onRemove={canAssignRoles && editing && !(org.is_platform && GOVERNING_ROLES.has(a.role_name)) ? () => run(() => api.removeOrganisationRole(a.id)) : undefined}
+                removeLabel={`Remove role ${a.role_name}`}
+                title={org.is_platform && GOVERNING_ROLES.has(a.role_name) ? "The platform organisation keeps this role — nobody could administer the installation without it." : undefined}
+              >
                 {roles.find((r) => r.name === a.role_name)?.label ?? a.role_name}
               </Tag>
             ))}

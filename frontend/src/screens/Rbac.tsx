@@ -2,6 +2,7 @@ import { ReactNode, createContext, useContext, useEffect, useMemo, useState } fr
 import type { RbacApi } from "../api/client";
 import { useApi } from "../api/context";
 import { usePrincipal } from "../api/principal";
+import { GOVERNING_ROLES } from "../api/types";
 import type { AttrPermission, ResourceAction, ResourcePermission, Role, RbacAttribute } from "../api/types";
 import { useIdentity } from "../identity/context";
 import { Button } from "../design/Button";
@@ -166,7 +167,16 @@ function RolesPanel({ roles, onChanged, perms }: { roles: Role[]; onChanged: () 
               key: "toggle",
               header: "",
               align: "right",
-              render: (r) => <Toggle checked={r.active} disabled={!perms.update} onChange={(v) => toggle(r, v)} label={r.active ? "Deactivate" : "Activate"} />,
+              render: (r) => (
+                <Toggle
+                  checked={r.active}
+                  // a governing role cannot be deactivated: it would lock everyone out at once
+                  disabled={!perms.update || (r.active && GOVERNING_ROLES.has(r.name))}
+                  title={r.active && GOVERNING_ROLES.has(r.name) ? "This installation is administered with this role; deactivating it would lock everyone out." : undefined}
+                  onChange={(v) => toggle(r, v)}
+                  label={r.active ? "Deactivate" : "Activate"}
+                />
+              ),
             },
           ]}
         />

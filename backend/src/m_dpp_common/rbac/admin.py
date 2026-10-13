@@ -183,6 +183,8 @@ def make_rbac_router(
     include_roles: bool = True,
     include_organisation_roles: bool = True,
     validate_organisation_role=None,
+    validate_organisation_role_removal=None,
+    validate_role_update=None,
     on_organisation_role_change=None,
 ) -> APIRouter:
     """
@@ -198,6 +200,14 @@ def make_rbac_router(
     validate_organisation_role(organisation_id, role_name, db):
                      async hook called before an assignment is created. Raise an
                      HTTPException to refuse it.
+    validate_organisation_role_removal(assignment, db):
+                     async hook called before an assignment is revoked. Raise to
+                     refuse it — identity keeps the platform organisation's
+                     governing roles, or nobody could administer the installation.
+    validate_role_update(role, changes, db):
+                     async hook called before a role is changed; ``changes`` is the
+                     dict of fields actually being set. Raise to refuse — identity
+                     refuses deactivating a governing role for the same reason.
     on_organisation_role_change(db, action, assignment, principal):
                      called with ``action`` ``"granted"`` or ``"revoked"``, inside
                      the SAME transaction as the change, before the commit — so a
@@ -285,7 +295,11 @@ def make_rbac_router(
         role = (await db.execute(select(Role).where(Role.name == name))).scalar_one_or_none()
         if role is None:
             raise HTTPException(status_code=404, detail="Role not found")
-        for field, value in body.model_dump(exclude_none=True).items():
+        changes = body.model_dump(exclude_none=True)
+        if validate_role_update is not None:
+            # May raise: the service decides which changes are legal for it.
+            await validate_role_update(role, changes, db)
+        for field, value in changes.items():
             setattr(role, field, value)
         await db.commit()
         await db.refresh(role)
@@ -577,6 +591,10 @@ def make_rbac_router(
         ).scalar_one_or_none()
         if obj is None:
             raise HTTPException(status_code=404, detail="Assignment not found")
+        if validate_organisation_role_removal is not None:
+            # May raise — and before the trail is written, so a refusal leaves
+            # no record of a revocation that never happened.
+            await validate_organisation_role_removal(obj, db)
         if on_organisation_role_change is not None:
             # Before the delete: afterwards the row is gone and the trail could
             # only say that *something* was revoked.
