@@ -12,11 +12,23 @@ GLN_PEDANTIC = os.getenv("GLN_PEDANTIC", "false").lower() == "true"
 #: names a company, and getting it slightly wrong is recoverable.
 #:
 #: Set `GS1_PEDANTIC=false` for demos and fixtures, where inventing valid check
-#: digits by hand is friction with no benefit. Leniency relaxes ONLY the
-#: checksum: the value must still be 8, 12, 13 or 14 digits and is still padded
-#: to 14, so the shape of every stored identifier is unchanged and turning the
-#: flag back on cannot alter what a path means.
+#: digits — or 14 digits at all — by hand is friction with no benefit. Leniency
+#: relaxes the checksum AND the length: any 1–14 digits are accepted. The GS1
+#: lengths (8, 12, 13) are still zero-padded to 14, as they are when strict, so
+#: an identifier that is valid in both modes means the same path in both; any
+#: other length is stored as typed. Digits remain the rule in both modes.
+#:
+#: What this costs: a lenient installation can hold paths a strict one would
+#: refuse, so turning the flag on later refuses to READ them too — the choice
+#: was made for the pilot, where short demo GTINs are the common case.
 GS1_PEDANTIC = os.getenv("GS1_PEDANTIC", "true").lower() != "false"
+
+#: GS1 lengths that are padded to GTIN-14 — in both modes.
+_GS1_GTIN_LENGTHS = (8, 12, 13)
+
+
+def _strict(pedantic: bool | None) -> bool:
+    return pedantic if pedantic is not None else GS1_PEDANTIC
 
 
 def _check_digit(digits: list[int]) -> int:
@@ -25,15 +37,17 @@ def _check_digit(digits: list[int]) -> int:
 
 
 def validate_gtin(v: str, *, pedantic: bool | None = None) -> str:
-    """A 14-digit GTIN, check digit verified unless leniency is configured.
+    """A 14-digit GTIN, check digit verified — or, when lenient, any 1–14 digits.
 
     `pedantic` overrides the environment for one call — used by tests, and by any
     caller that must be strict regardless of how the deployment is configured.
     """
+    if not _strict(pedantic):
+        if not re.fullmatch(r"\d{1,14}", v):
+            raise ValueError("GTIN must be 1–14 digits")
+        return v
     if not re.fullmatch(r"\d{14}", v):
         raise ValueError("GTIN must be exactly 14 digits")
-    if pedantic is False or (pedantic is None and not GS1_PEDANTIC):
-        return v
     digits = [int(c) for c in v]
     if _check_digit(digits[:-1]) != digits[-1]:
         raise ValueError(
@@ -41,6 +55,28 @@ def validate_gtin(v: str, *, pedantic: bool | None = None) -> str:
             "(set GS1_PEDANTIC=false to accept unverified identifiers in development)"
         )
     return v
+
+
+def clean_gtin(raw: str, *, pedantic: bool | None = None) -> str:
+    """A GTIN as typed into a path → its stored form.
+
+    Strict: 8, 12, 13 or 14 digits, zero-padded to 14, check digit verified.
+    Lenient: any 1–14 digits; the GS1 lengths are still padded to 14 (so a value
+    valid in both modes stores the same way in both), anything else as typed, no
+    checksum. Raises `ValueError` with a message that names the rule.
+    """
+    v = raw.strip()
+    if _strict(pedantic):
+        if not re.fullmatch(r"\d{8}|\d{12,14}", v):
+            raise ValueError(
+                f"'{raw}' is not a GTIN (8, 12, 13 or 14 digits) "
+                "(set GS1_PEDANTIC=false to accept any 1–14 digits in development)"
+            )
+    elif not re.fullmatch(r"\d{1,14}", v):
+        raise ValueError(f"'{raw}' is not a GTIN (1–14 digits when GS1_PEDANTIC=false)")
+    if len(v) in _GS1_GTIN_LENGTHS:
+        v = v.zfill(14)
+    return validate_gtin(v, pedantic=pedantic)
 
 
 def derive_gln(prefix: str) -> str:

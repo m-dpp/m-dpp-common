@@ -1,6 +1,6 @@
 import pytest
 
-from m_dpp_common.gs1 import derive_gln, validate_gln, validate_gtin
+from m_dpp_common.gs1 import clean_gtin, derive_gln, validate_gln, validate_gtin
 
 # 0871803600100 + computed check digit 8
 VALID_GTIN = "08718036001008"
@@ -51,13 +51,41 @@ def test_leniency_accepts_an_unverified_check_digit():
     assert validate_gtin("08718036001019", pedantic=False) == "08718036001019"
 
 
-def test_leniency_does_not_relax_the_shape():
-    """Only the checksum is optional. Length and digits are what make a stored
-    path mean the same thing in both modes — relaxing those would make turning
-    the flag back on a data migration."""
-    for bad in ("123", "0871803600101", "abcdefghijklmn", "087180360010199"):
+def test_leniency_relaxes_the_length_but_never_the_digits():
+    """Short demo GTINs were the pilot's common case, so lenient accepts any
+    1–14 digits. Still digits, still at most 14: a GTIN of any kind is numeric,
+    and a cap is a cap. Strict mode is unchanged."""
+    for ok in ("1", "123", "0871803600101", "08718036001019"):
+        assert validate_gtin(ok, pedantic=False) == ok
+    for bad in ("", "abcdefghijklmn", "087180360010199", "12 34"):
         with pytest.raises(ValueError):
             validate_gtin(bad, pedantic=False)
+    for bad in ("123", "0871803600101"):
+        with pytest.raises(ValueError):
+            validate_gtin(bad, pedantic=True)
+
+
+def test_clean_gtin_pads_the_gs1_lengths_in_both_modes():
+    """A value that is valid in both modes stores the same way in both — the
+    padding is what keeps a lenient path readable after the flag is turned on."""
+    assert clean_gtin(VALID_GTIN[1:], pedantic=True) == VALID_GTIN  # GTIN-13
+    assert clean_gtin(VALID_GTIN[1:], pedantic=False) == VALID_GTIN
+    assert clean_gtin("12345678", pedantic=False) == "00000012345678"  # GTIN-8
+    assert clean_gtin("123456789012", pedantic=False) == "00123456789012"  # GTIN-12
+
+
+def test_clean_gtin_lenient_keeps_other_lengths_as_typed():
+    assert clean_gtin("12345", pedantic=False) == "12345"
+    assert clean_gtin(" 7 ", pedantic=False) == "7"
+    with pytest.raises(ValueError, match="1–14 digits"):
+        clean_gtin("123456789012345", pedantic=False)
+
+
+def test_clean_gtin_strict_refuses_other_lengths_and_says_how_to_relax():
+    with pytest.raises(ValueError, match="GS1_PEDANTIC"):
+        clean_gtin("12345", pedantic=True)
+    with pytest.raises(ValueError, match="check digit"):
+        clean_gtin("08718036001019", pedantic=True)
 
 
 def test_a_valid_gtin_passes_either_way():
