@@ -100,6 +100,12 @@ export function FibreTaxonomy({ resourceType = "fibre_nodes" }: FibreTaxonomyPro
   const { can } = usePrincipal();
   const [includeRemoved, setIncludeRemoved] = useState(false);
   const nodes = useAsync(() => mdpp.listFibreNodes({ includeRemoved }), [mdpp, includeRemoved]);
+  // A failed load is one of two very different things: mdpp refused or could
+  // not answer about the taxonomy, or mdpp is not there at all (a host's proxy
+  // answers 500 for an upstream it cannot reach). Only the probe tells them
+  // apart, and "HTTP 500" helps nobody with either.
+  const reachable = useAsync(() => (nodes.error ? mdpp.ping() : Promise.resolve(true)), [mdpp, nodes.error]);
+  const down = !!nodes.error && !reachable.loading && reachable.data === false;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -127,8 +133,22 @@ export function FibreTaxonomy({ resourceType = "fibre_nodes" }: FibreTaxonomyPro
               label="Show removed nodes"
             />
           </Field>
-          {nodes.error && <Notice tone="error">{nodes.error}</Notice>}
-          {forest.length === 0 ? (
+          {nodes.error && (
+            <Notice tone="error">
+              {down ? (
+                <>
+                  <strong>The molecular service is not responding.</strong> This app is configured to reach
+                  mdpp at <code>{mdpp.baseUrl}</code>, but the request failed ({nodes.error}). The taxonomy
+                  cannot be shown until it is reachable again — nothing here is missing or deleted. Check that
+                  the mdpp stack is running.
+                </>
+              ) : (
+                <>Could not load the taxonomy: {nodes.error}</>
+              )}
+            </Notice>
+          )}
+          {/* an error is not an empty taxonomy — saying "No fibres yet" under it would be a second, false message */}
+          {nodes.error ? null : forest.length === 0 ? (
             <EmptyState
               compact
               title={nodes.loading ? "Loading…" : "No fibres yet"}
