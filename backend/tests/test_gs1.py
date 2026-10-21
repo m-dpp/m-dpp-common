@@ -1,6 +1,6 @@
 import pytest
 
-from m_dpp_common.gs1 import clean_gtin, derive_gln, validate_gln, validate_gtin
+from m_dpp_common.gs1 import GS1_RESOLVER, clean_gtin, derive_gln, gs1_dl_base, validate_gln, validate_gtin
 
 # 0871803600100 + computed check digit 8
 VALID_GTIN = "08718036001008"
@@ -91,3 +91,23 @@ def test_clean_gtin_strict_refuses_other_lengths_and_says_how_to_relax():
 def test_a_valid_gtin_passes_either_way():
     assert validate_gtin("08718036001015") == "08718036001015"
     assert validate_gtin("08718036001015", pedantic=False) == "08718036001015"
+
+
+# ── where an identifier is said to live ──────────────────────────────────
+
+def test_a_strict_installation_emits_identifiers_under_gs1s_resolver():
+    assert gs1_dl_base(None, pedantic=True, public_host="pilot.example") == GS1_RESOLVER
+
+
+def test_a_lenient_installation_emits_identifiers_under_its_own_address():
+    """An invented number under id.gs1.org would claim a resolution GS1 never
+    made. The installation's own host is the honest namespace — and the same
+    one in every service, so the federation key is one IRI everywhere."""
+    assert gs1_dl_base(None, pedantic=False, public_host="pilot.example") == "http://pilot.example/id"
+    assert gs1_dl_base(None, pedantic=False, public_host=None) == "http://localhost/id"
+    assert gs1_dl_base("", pedantic=False, public_host=" ") == "http://localhost/id"
+
+
+def test_an_explicit_base_wins_in_either_mode():
+    assert gs1_dl_base("https://passports.byborre.example/", pedantic=True) == "https://passports.byborre.example"
+    assert gs1_dl_base("https://passports.byborre.example", pedantic=False) == "https://passports.byborre.example"

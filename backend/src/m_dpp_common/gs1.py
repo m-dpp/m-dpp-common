@@ -26,6 +26,28 @@ GS1_PEDANTIC = os.getenv("GS1_PEDANTIC", "true").lower() != "false"
 #: GS1 lengths that are padded to GTIN-14 — in both modes.
 _GS1_GTIN_LENGTHS = (8, 12, 13)
 
+#: GS1's own resolver — the base a REAL GS1 Digital Link lives under.
+GS1_RESOLVER = "https://id.gs1.org"
+
+
+def gs1_dl_base(explicit: str | None, *, pedantic: bool | None = None, public_host: str | None = None) -> str:
+    """The base under which a product's `@id` is emitted: `{base}/{gs1_path}`.
+
+    A strict installation holds real GS1 identifiers, so its identifiers are
+    valid GS1 Digital Links and live under GS1's resolver. A lenient one may
+    hold invented numbers, and emitting those under `id.gs1.org` would claim a
+    resolution GS1 never made — so by default it emits them under its OWN
+    address instead: `http://{PUBLIC_HOST}/id`, the same namespace in every
+    service of the installation, so the federation key is one IRI everywhere.
+    An explicit base always wins, in either mode (empty counts as unset).
+    """
+    if explicit and explicit.strip():
+        return explicit.strip().rstrip("/")
+    if _strict(pedantic):
+        return GS1_RESOLVER
+    host = (public_host or "").strip() or "localhost"
+    return f"http://{host}/id"
+
 
 def _strict(pedantic: bool | None) -> bool:
     return pedantic if pedantic is not None else GS1_PEDANTIC
